@@ -15,8 +15,8 @@ app.post('/snapshot', async (req, _) => {
   };
 });
 
-app.listen({ port: port }).then(() => {
-  console.log('Server running at http://localhost:8000/');
+app.listen(8000, '0.0.0.0').then(() => {
+  console.log('Server running ...');
 });
 
 
