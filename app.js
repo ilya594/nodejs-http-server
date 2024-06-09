@@ -8,7 +8,7 @@ const port = process.env.port || 8000;
 
 app.post('/snapshot', async (req, _) => {
 
-  fs.writeFileSync('../../../../var/data/snapshots/' + new Date().toDateString() + '.png', req.data);
+  fs.writeFileSync('../../../../var/data/snapshots/' + new Date().toDateString() + '.png', req.body?.image);
 
   return {
     error: false,
