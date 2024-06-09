@@ -9,11 +9,16 @@ const port = process.env.port || 8000;
 const host = '0.0.0.0';
 
 app.register(cors, { 
-  origin: false,
+  origin: '*',
+  methods: ['GET', 'POST']
 }).then(() => {
 
-
   app.post('/snapshot', async (req, reply) => {
+
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Access-Control-Allow-Origin, Cache-Control");
+
+
     fs.writeFileSync('../../../../var/data/snapshots/' + new Date().toDateString() + '.png', req.body?.image);
   
     reply.send({
