@@ -4,7 +4,7 @@ const fastify = require('fastify');
 const app = fastify();
 const fs = require('fs');
 
-
+const port = process.env.PORT || 8000;
 
 app.post('/snapshot', async (req, _) => {
 
@@ -15,7 +15,7 @@ app.post('/snapshot', async (req, _) => {
   };
 });
 
-app.listen({port: 8000}).then(() => {
+app.listen({port: port}).then(() => {
   console.log('Server running at http://localhost:8000/');
 });
 
