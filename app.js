@@ -59,7 +59,7 @@ app.post('/snapshot', async (request, response) => {
 
   const filePath = getPath(name);
   const fullPath = path.resolve(filePath);
-  
+
   handlePath(fullPath);
   
 
@@ -92,6 +92,44 @@ app.get('/ls', async (request, response) => {
       data: files,
     }));
   });
+});
+
+app.get('/lsall', async (_, response) => {
+  
+  console.log('app get: lsall');
+
+  const year = '2024';
+
+  const folders = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const read = (folder) => {
+
+    const folderPath = path.join(defaultPath, year, folder);
+
+    console.log('reading: ' + folderPath);    
+
+    handlePath(folderPath + '/dummy.file');
+
+    fs.readdir(folderPath, (error, files) => {
+      if (error) {
+        console.log('error on reading: ' + folder);
+      }
+      list.push(files);
+      if (i < folders.length - 1) {
+        i = i + 1;
+        read(folders[i]);
+      } else {
+        response.send(JSON.stringify({
+          error: error,
+          data: list,
+        }));
+      }
+    });
+  }
+
+  let list = new Array();
+  let i = 0;
+  read(folders[i]);
 });
   
 app.listen(port, async () => {
