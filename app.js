@@ -20,6 +20,7 @@ const handlePath = (filePath) => {
     return true;
   }
   handlePath(dirname);
+  console.log('handling path. creating mkdirSync name: ' + dirname);
   fs.mkdirSync(dirname);
 }
 
@@ -51,10 +52,16 @@ app.post('/snapshot', async (request, response) => {
   const image = request.body.file;
   const name = request.body.name;
 
+  console.log('receiving post request: [image: ' + Boolean(image) + ', name: ' + name + ']');
+
   const data = image.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(data, 'base64');
 
-  fs.writeFile(handlePath(getPath(name)), buffer, () => {
+  const filePath = getPath(name);
+
+  console.log('writing file buffer to disk: path: ' + filePath);
+
+  fs.writeFile(handlePath(filePath), buffer, () => {
     response.send(JSON.stringify({
       error: false,
     }));  
