@@ -58,10 +58,14 @@ app.post('/snapshot', async (request, response) => {
   const buffer = Buffer.from(data, 'base64');
 
   const filePath = getPath(name);
+  const fullPath = path.resolve(filePath);
+  
+  handlePath(fullPath);
+  
 
-  console.log('writing file buffer to disk: path: ' + filePath);
+  console.log('writing file buffer to disk: path: ' + fullPath);
 
-  fs.writeFile(handlePath(filePath), buffer, () => {
+  fs.writeFile(fullPath, buffer, () => {
     response.send(JSON.stringify({
       error: false,
     }));  
