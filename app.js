@@ -24,6 +24,8 @@ const handlePath = (filePath) => {
   fs.mkdirSync(dirname);
 }
 
+const year = '2024';
+
 const defaultPath = './../../../../var/data/snapshots/';
 
 const monthMap = {
@@ -72,10 +74,24 @@ app.post('/snapshot', async (request, response) => {
   });
 });
 
-app.get('/snapshot', async (_, response) => {
- response.send(JSON.stringify({
-    error: false,
-  }));
+app.get('/snapshot', async (request, response) => {
+
+  if (!request.body) return response.sendStatus(400);
+
+  const month = request.query.month;
+  const name = request.query.name;
+
+  const filePath = path.join(defaultPath, year, month, name);
+  const fullPath = path.resolve(filePath);
+
+  console.log('trying to read file: path: ' + fullPath);
+
+  fs.readFile(fullPath, (error, data) => {
+    response.send(JSON.stringify({
+      error: Boolean(error),
+      data: data,
+    }));
+  });
 });
 
 
@@ -84,7 +100,7 @@ app.get('/ls', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
-  const location = request.body.location || '2024';
+  const location = request.body.location || year;
 
   fs.readdir(path.join(defaultPath, location), (error, files) => {
     response.send(JSON.stringify({
@@ -97,8 +113,6 @@ app.get('/ls', async (request, response) => {
 app.get('/lsall', async (_, response) => {
   
   console.log('app get: lsall');
-
-  const year = '2024';
 
   const folders = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -131,6 +145,8 @@ app.get('/lsall', async (_, response) => {
   let i = 0;
   read(folders[i]);
 });
+
+
   
 app.listen(port, async () => {
   console.log('server listening to port: ' + port);
