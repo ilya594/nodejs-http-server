@@ -90,7 +90,8 @@ app.get('/snapshot', async (request, response) => {
     if (error) {
       console.log(error);
     }
-    response.send(data);
+    const base64 = Buffer.from(data).toString('base64');
+    response.send(base64);
   });
 });
 
