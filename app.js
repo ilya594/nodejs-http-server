@@ -87,10 +87,10 @@ app.get('/snapshot', async (request, response) => {
   console.log('trying to read file: path: ' + fullPath);
 
   fs.readFile(fullPath, (error, data) => {
-    response.send(JSON.stringify({
-      error: Boolean(error),
-      data: data,
-    }));
+    if (error) {
+      console.log(error);
+    }
+    response.send(data);
   });
 });
 
