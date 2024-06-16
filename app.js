@@ -99,7 +99,7 @@ app.get('/snapshot', async (request, response) => {
   });
 });
 
-app.get('delsnapshot', async (request, response) => {
+app.get('/delsnapshot', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
