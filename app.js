@@ -6,6 +6,10 @@ const express = require('express');
 const cors = require('cors');
 const parser = require('body-parser');
 
+const bcrypt = require('bcrypt');
+
+
+
 const port = process.env.port || 8000;
 //const host = 'localhost';
 
@@ -95,6 +99,23 @@ app.get('/snapshot', async (request, response) => {
   });
 });
 
+app.get('delsnapshot', async (request, response) => {
+
+  if (!request.body) return response.sendStatus(400);
+
+  const month = request.query.month;
+  const name = request.query.name;
+
+  const filePath = path.join(defaultPath, year, month, name);
+  const fullPath = path.resolve(filePath);
+
+  fs.unlink(fullPath, (error) => {
+    response.send({
+      data: !Boolean(error)
+    });
+  });  
+});
+
 
 
 app.get('/ls', async (request, response) => {
@@ -145,6 +166,18 @@ app.get('/lsall', async (_, response) => {
   let list = new Array();
   let i = 0;
   read(folders[i]);
+});
+
+app.get('/hashtest', async (request, response) => {
+
+  const saltOrRounds = 10;
+  const password = 'password';
+  const hash = await bcrypt.hash(password, saltOrRounds);
+
+  response.send({
+    hash: hash
+  });
+
 });
 
 
