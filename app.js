@@ -172,9 +172,9 @@ app.get('/valprediction', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
-  const prediction = request.query.prediction;
+  const prediction = Array(JSON.parse(request.query.prediction));
   
-  const result = prediction[prediction.length - 1].value === process.env.auth;
+  const result = Number(prediction[prediction.length - 1].value) == Number(process.env.auth);
 
   response.send(JSON.stringify({
     data: result,
