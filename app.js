@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 
 
 const port = process.env.port || 8000;
+const auth = process.env.auth || 2;
 //const host = 'localhost';
 
 const options = {
@@ -172,9 +173,11 @@ app.get('/valprediction', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
-  const prediction = Array(JSON.parse(request.query.prediction));
-  
-  const result = Number(prediction[prediction.length - 1].value) == Number(process.env.auth);
+ // const query = JSON.parse(request.query);
+
+  const prediction = request.query.prediction?.pop();
+ 
+  const result = prediction.value === String(auth);
 
   response.send(JSON.stringify({
     data: result,
