@@ -168,6 +168,19 @@ app.get('/lsall', async (_, response) => {
   read(folders[i]);
 });
 
+app.get('/valprediction', async (request, response) => {
+
+  if (!request.body) return response.sendStatus(400);
+
+  const prediction = request.query.prediction;
+  
+  const result = prediction[prediction.length].value === process.env.auth;
+
+  response.send(JSON.stringify({
+    data: result,
+  }));  
+});
+
 app.get('/hashtest', async (request, response) => {
 
   const saltOrRounds = 10;
@@ -177,7 +190,6 @@ app.get('/hashtest', async (request, response) => {
   response.send({
     hash: hash
   });
-
 });
 
 
