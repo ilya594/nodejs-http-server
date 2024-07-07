@@ -186,7 +186,7 @@ app.get('/login', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
-  const hash = request.query.hash?.pop();
+  const hash = request.query.pin?.toString() || '';
 
   const pin = process.env.pin.toString();
 
