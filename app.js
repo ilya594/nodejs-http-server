@@ -188,7 +188,9 @@ app.get('/login', async (request, response) => {
 
   const hash = request.query.hash?.pop();
 
-  const result = bcrypt.compareSync(process.env.pin, hash);
+  const pin = process.env.pin.toString();
+
+  const result = await bcrypt.compare(pin, hash)
 
   response.send({
     result: result,
