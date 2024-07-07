@@ -173,8 +173,6 @@ app.get('/valprediction', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
- // const query = JSON.parse(request.query);
-
   const prediction = request.query.prediction?.pop();
  
   const result = prediction.value === String(auth);
@@ -184,14 +182,20 @@ app.get('/valprediction', async (request, response) => {
   }));  
 });
 
-app.get('/hashtest', async (request, response) => {
+app.get('/login', async (request, response) => {
+
+  if (!request.body) return response.sendStatus(400);
+
+  const received = request.query.hash?.pop();
 
   const saltOrRounds = 10;
-  const password = 'password';
-  const hash = await bcrypt.hash(password, saltOrRounds);
+  const pin = process.env.pin;
+  const hash = await bcrypt.hash(pin, saltOrRounds);
+
+  const result = received === hash;
 
   response.send({
-    hash: hash
+    result: result,
   });
 });
 
