@@ -186,13 +186,9 @@ app.get('/login', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
 
-  const received = request.query.hash?.pop();
+  const hash = request.query.hash?.pop();
 
-  const saltOrRounds = 10;
-  const pin = process.env.pin;
-  const hash = await bcrypt.hash(pin, saltOrRounds);
-
-  const result = received === hash;
+  const result = bcrypt.compareSync(process.env.pin, hash);
 
   response.send({
     result: result,
