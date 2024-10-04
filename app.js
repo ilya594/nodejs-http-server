@@ -88,7 +88,7 @@ app.post('/snapshot', async (request, response) => {
 
 app.get('/snapshot', async (request, response) => {
 
-  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
+  if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
 
   const month = request.query.month;
   const name = request.query.name;
@@ -109,7 +109,7 @@ app.get('/snapshot', async (request, response) => {
 
 app.get('/delsnapshot', async (request, response) => {
 
-  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
+  if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
 
   const month = request.query.month;
   const name = request.query.name;
@@ -128,7 +128,7 @@ app.get('/delsnapshot', async (request, response) => {
 
 app.get('/ls', async (request, response) => {
 
-  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
+  if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
 
   const location = request.body.location || year;
 
@@ -142,7 +142,7 @@ app.get('/ls', async (request, response) => {
 
 app.get('/lsall', async (request, response) => {
 
-  if (!validatePin(request.query.pin)) return response.sendStatus(400);
+  if (!await validatePin(request.query.pin)) return response.sendStatus(400);
   
   console.log('app get: lsall');
 
@@ -180,7 +180,7 @@ app.get('/lsall', async (request, response) => {
 
 app.get('/valprediction', async (request, response) => {
 
-  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
+  if (!request.body || ! await validatePin(request.query.pin)) return response.sendStatus(400);
 
   const prediction = request.query.prediction?.pop();
  
@@ -196,7 +196,7 @@ app.get('/login', async (request, response) => {
   if (!request.body) return response.sendStatus(400);
 
   response.send({
-    result: validatePin(request.query.pin) ? true : false
+    result: await validatePin(request.query.pin) ? true : false
   });
 });
 
