@@ -193,10 +193,10 @@ app.get('/valprediction', async (request, response) => {
 
 app.get('/login', async (request, response) => {
 
-  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
+  if (!request.body) return response.sendStatus(400);
 
   response.send({
-    result: result,
+    result: validatePin(request.query.pin) ? true : false
   });
 });
 
