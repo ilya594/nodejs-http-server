@@ -52,9 +52,16 @@ app.use(cors(options));
 app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
 
+const validatePin = async (received) => {
+  const hash = received?.toString() || '';
+  const pin = process.env.pin.toString();
+  const result = await bcrypt.compare(pin, hash);
+  return result;
+}
+
 app.post('/snapshot', async (request, response) => {
 
-  if (!request.body) return response.sendStatus(400);
+  if (!request.body || !validatePin(request.body.pin)) return response.sendStatus(400);
 
   const image = request.body.file;
   const name = request.body.name;
@@ -81,7 +88,7 @@ app.post('/snapshot', async (request, response) => {
 
 app.get('/snapshot', async (request, response) => {
 
-  if (!request.body) return response.sendStatus(400);
+  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
 
   const month = request.query.month;
   const name = request.query.name;
@@ -102,7 +109,7 @@ app.get('/snapshot', async (request, response) => {
 
 app.get('/delsnapshot', async (request, response) => {
 
-  if (!request.body) return response.sendStatus(400);
+  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
 
   const month = request.query.month;
   const name = request.query.name;
@@ -121,7 +128,7 @@ app.get('/delsnapshot', async (request, response) => {
 
 app.get('/ls', async (request, response) => {
 
-  if (!request.body) return response.sendStatus(400);
+  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
 
   const location = request.body.location || year;
 
@@ -133,7 +140,9 @@ app.get('/ls', async (request, response) => {
   });
 });
 
-app.get('/lsall', async (_, response) => {
+app.get('/lsall', async (request, response) => {
+
+  if (!validatePin(request.query.pin)) return response.sendStatus(400);
   
   console.log('app get: lsall');
 
@@ -171,7 +180,7 @@ app.get('/lsall', async (_, response) => {
 
 app.get('/valprediction', async (request, response) => {
 
-  if (!request.body) return response.sendStatus(400);
+  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
 
   const prediction = request.query.prediction?.pop();
  
@@ -184,13 +193,7 @@ app.get('/valprediction', async (request, response) => {
 
 app.get('/login', async (request, response) => {
 
-  if (!request.body) return response.sendStatus(400);
-
-  const hash = request.query.pin?.toString() || '';
-
-  const pin = process.env.pin.toString();
-
-  const result = await bcrypt.compare(pin, hash)
+  if (!request.body || !validatePin(request.query.pin)) return response.sendStatus(400);
 
   response.send({
     result: result,
