@@ -29,7 +29,7 @@ const handlePath = (filePath) => {
   fs.mkdirSync(dirname);
 }
 
-const year = '2024';
+const year = '2025';
 
 const defaultPath = './../../../../var/data/snapshots/';
 
