@@ -222,7 +222,6 @@ app.post('/addpeerid', async (request, response) => {
 
   if (id) {
     peers.set(id, {
-      ...metadata,
       id,
       lastHeartbeat: Date.now(),
       registeredAt: Date.now(),
