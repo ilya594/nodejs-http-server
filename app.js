@@ -46,7 +46,7 @@ const getPath = (fileName) => {
   return path.join(defaultPath, year, monthMap[month], fileName);
 }
 
-var peers = [];
+var peers = new Map();
 
 const app = express();
 
@@ -210,7 +210,7 @@ app.get('/getpeersids', async (request, response) => {
   if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
 
   response.send({
-    data: peers,
+    data: Array.from(peers.keys()),
   });
 });
 
@@ -221,7 +221,13 @@ app.post('/addpeerid', async (request, response) => {
   const id = request.body.id;
 
   if (id) {
-    peers.push(id);
+    peers.set(id, {
+      ...metadata,
+      id,
+      lastHeartbeat: Date.now(),
+      registeredAt: Date.now(),
+      isActive: true
+    });
     response.send(JSON.stringify({
       error: false,
     }));
@@ -230,11 +236,47 @@ app.post('/addpeerid', async (request, response) => {
       error: 'no id provided',
     }));
   }
-
 });
 
+app.post('/heartbeat', async (request, response) => {
 
+  if (!request.body) return response.sendStatus(400);
+
+  const id = request.body.id;
+
+  if (id) {
+    if (peers.has(id)) {
+      peers.get(id).lastHeartbeat = Date.now();
+      peers.get(id).isActive = true;
+    }
+    response.send(JSON.stringify({
+      error: false,
+    }));
+  } else {
+    response.send(JSON.stringify({
+      error: 'no id provided',
+    }));
+  }
+});
 
 app.listen(port, async () => {
   console.log('server listening to port: ' + port);
 });
+
+setInterval(() => {
+  const now = Date.now();
+  const HEARTBEAT_THRESHOLD = 45000; // 45 seconds
+  
+  for (const [peerId, data] of peers) {
+    if (now - data.lastHeartbeat > HEARTBEAT_THRESHOLD) {
+      console.log(`Removing inactive streamer: ${peerId}`);
+      removeStreamer(peerId);
+    }
+  }
+}, 30000); // Run every 30 seconds
+
+function removeStreamer(peerId) {
+  if (peers.delete(peerId)) {
+    //broadcastStreamerUpdate('removed', peerId);
+  }
+}
