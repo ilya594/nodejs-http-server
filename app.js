@@ -237,6 +237,25 @@ app.post('/addpeerid', async (request, response) => {
   }
 });
 
+app.post('/removepeerid', async (request, response) => {
+
+  if (!request.body) return response.sendStatus(400);
+
+  const id = request.body.id;
+
+  if (id) {
+    if (peers.delete(id)) {
+      response.send(JSON.stringify({
+        error: false,
+      }));
+    } else {
+      response.send(JSON.stringify({
+        error: 'no id provided',
+      }));
+    }
+  }
+});
+
 app.post('/heartbeat', async (request, response) => {
 
   if (!request.body) return response.sendStatus(400);
@@ -264,15 +283,15 @@ app.listen(port, async () => {
 
 setInterval(() => {
   const now = Date.now();
-  const HEARTBEAT_THRESHOLD = 45000; // 45 seconds
-  
+  const HEARTBEAT_THRESHOLD = 20000; // 45 seconds
+
   for (const [peerId, data] of peers) {
     if (now - data.lastHeartbeat > HEARTBEAT_THRESHOLD) {
       console.log(`Removing inactive streamer: ${peerId}`);
       removeStreamer(peerId);
     }
   }
-}, 30000); // Run every 30 seconds
+}, 10000); // Run every 30 seconds
 
 function removeStreamer(peerId) {
   if (peers.delete(peerId)) {
