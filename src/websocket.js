@@ -7,9 +7,9 @@ const WebSocket = require('ws');
 class WebSocketServer {
   constructor(config = {}) {
     this.config = {
-      port: config.port || process.env.WS_PORT || 8001,
+      port: process.env.PORT || 8000,
       host: config.host || '0.0.0.0',
-      path: config.path || '/',
+      path: config.path || '/ws',
       createHttpServer: config.createHttpServer !== false,
       // ... rest of config
     };

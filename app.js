@@ -20,7 +20,7 @@ const httpsServer = new HttpsServer({ app: app, peers: peers });
 httpsServer.start();
 
 
-const wsServer = new WebSocketServer({ port: 8001, httpServer: server, peers: peers });
+const wsServer = new WebSocketServer({ httpServer: server, peers: peers });
 wsServer.start();
 
 wsServer.registerMessageHandler('heartbeat', (client, data) => {
