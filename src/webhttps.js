@@ -229,6 +229,7 @@ class HttpsServer {
                     registeredAt: Date.now(),
                     isActive: true
                 });
+                console.log('peer added: [' +  id + '], size: [' + this.peers.size + ']');
                 response.send(JSON.stringify({
                     error: false,
                 }));
@@ -250,6 +251,7 @@ class HttpsServer {
                     response.send(JSON.stringify({
                         error: false,
                     }));
+                    console.log('peer removed: [' +  id + '], size: [' + this.peers.size + ']');
                 } else {
                     response.send(JSON.stringify({
                         error: 'no id provided',

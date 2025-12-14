@@ -33,13 +33,14 @@ wsServer.registerMessageHandler('heartbeat', (client, data) => {
 
 setInterval(() => {
   const now = Date.now();
-  const HEARTBEAT_THRESHOLD = 20000;
+  const HEARTBEAT_THRESHOLD = 30000;
   for (const [peerId, data] of peers) {
     if (now - data.lastHeartbeat > HEARTBEAT_THRESHOLD) {
-      peers.delete(peerId)
+      console.log('removing peer cuz of timeout: [' +  peerId + '], size: [' + peers.size + ']');
+      peers.delete(peerId);
     }
   }
-}, 10000);
+}, 30000);
 
 
 
