@@ -25,9 +25,17 @@ wsServer.start();
 
 wsServer.registerMessageHandler('heartbeat', (client, data) => {
   const id = data?.id;
-  if (id && peers.has(id)) {
+  if (!id) return;
+  if (peers.has(id)) {
     peers.get(id).lastHeartbeat = Date.now();
     peers.get(id).isActive = true;
+  } else {
+    this.peers.set(id, {
+      id,
+      lastHeartbeat: Date.now(),
+      registeredAt: Date.now(),
+      isActive: true
+    });
   }
 });
 
@@ -36,7 +44,7 @@ setInterval(() => {
   const HEARTBEAT_THRESHOLD = 30000;
   for (const [peerId, data] of peers) {
     if (now - data.lastHeartbeat > HEARTBEAT_THRESHOLD) {
-      console.log('removing peer cuz of timeout: [' +  peerId + '], size: [' + peers.size + ']');
+      console.log('removing peer cuz of timeout: [' + peerId + '], size: [' + peers.size + ']');
       peers.delete(peerId);
     }
   }
