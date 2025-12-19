@@ -30,7 +30,7 @@ wsServer.registerMessageHandler('heartbeat', (client, data) => {
     peers.get(id).lastHeartbeat = Date.now();
     peers.get(id).isActive = true;
   } else {
-    this.peers.set(id, {
+    peers.set(id, {
       id,
       lastHeartbeat: Date.now(),
       registeredAt: Date.now(),
