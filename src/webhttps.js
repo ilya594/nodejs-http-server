@@ -163,8 +163,279 @@ class HttpsServer {
             const name = request.query.name;
 
             downloadAndDeleteSnapshotsForMonth(month);
+        });
 
+        this.app.get('/scissordir', async (request, response) => {
+            if (!await validatePin(request.query.pin)) return response.sendStatus(400);
 
+            console.log('Starting /scissordir - downloading and deleting ALL snapshots');
+
+            // Helper to get month name from month number (for path)
+            const getMonthName = (monthNumber) => {
+                const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+                return months[parseInt(monthNumber) - 1] || monthNumber;
+            };
+
+            // Helper function to get all snapshots
+            const getAllSnapshots = async () => {
+                return new Promise((resolve, reject) => {
+                    const folders = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+
+                    let allSnapshots = [];
+                    let processedFolders = 0;
+
+                    // If no folders exist, return empty
+                    if (processedFolders === 0 && folders.length === 0) {
+                        resolve(allSnapshots);
+                        return;
+                    }
+
+                    folders.forEach(folder => {
+                        const folderPath = path.join(defaultPath, year, folder);
+
+                        // Check if folder exists
+                        fs.access(folderPath, fs.constants.F_OK, (err) => {
+                            if (err) {
+                                // Folder doesn't exist, skip
+                                processedFolders++;
+                                if (processedFolders === folders.length) {
+                                    resolve(allSnapshots);
+                                }
+                                return;
+                            }
+
+                            // Read files in folder
+                            fs.readdir(folderPath, (error, files) => {
+                                if (error) {
+                                    console.error(`Error reading ${folder}:`, error);
+                                } else if (files && files.length > 0) {
+                                    // Filter for snapshot files if needed
+                                    files.forEach(fileName => {
+                                        // Optional: check if it's a snapshot file
+                                        // if (fileName.endsWith('.snapshot') || fileName.includes('snap')) {
+                                        allSnapshots.push({
+                                            id: fileName,
+                                            name: fileName,
+                                            month: folder,
+                                            monthNumber: Object.keys(monthMap).find(key => monthMap[key] === folder) || '01',
+                                            path: path.join(folderPath, fileName)
+                                        });
+                                        // }
+                                    });
+                                }
+
+                                processedFolders++;
+                                if (processedFolders === folders.length) {
+                                    resolve(allSnapshots);
+                                }
+                            });
+                        });
+                    });
+                });
+            };
+
+            // Download a snapshot using your existing endpoint pattern
+            const downloadSnapshot = async (snapshot) => {
+                return new Promise((resolve) => {
+                    const filePath = snapshot.path;
+
+                    fs.readFile(filePath, (error, data) => {
+                        if (error) {
+                            console.error(`Download failed for ${snapshot.name}:`, error);
+                            resolve({ success: false, error: error.message });
+                        } else {
+                            // Save to a downloads directory
+                            const downloadsDir = path.join(__dirname, 'downloads', year, snapshot.month);
+
+                            // Create directory if it doesn't exist
+                            if (!fs.existsSync(downloadsDir)) {
+                                fs.mkdirSync(downloadsDir, { recursive: true });
+                            }
+
+                            const downloadPath = path.join(downloadsDir, snapshot.name);
+
+                            fs.writeFile(downloadPath, data, (writeError) => {
+                                if (writeError) {
+                                    console.error(`Failed to save download for ${snapshot.name}:`, writeError);
+                                    resolve({ success: false, error: writeError.message });
+                                } else {
+                                    console.log(`Downloaded and saved: ${snapshot.name} to ${downloadPath}`);
+                                    resolve({
+                                        success: true,
+                                        path: downloadPath,
+                                        size: data.length,
+                                        base64: Buffer.from(data).toString('base64').substring(0, 50) + '...' // Preview
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+            };
+
+            // Delete a snapshot (your existing pattern)
+            const delSnapshot = async (snapshot) => {
+                return new Promise((resolve) => {
+                    const filePath = snapshot.path;
+
+                    fs.unlink(filePath, (error) => {
+                        if (error) {
+                            console.error(`Delete failed for ${snapshot.name}:`, error);
+                            resolve({ success: false, error: error.message });
+                        } else {
+                            console.log(`Deleted: ${snapshot.name}`);
+                            resolve({ success: true });
+                        }
+                    });
+                });
+            };
+
+            // Main processing function
+            const processAllSnapshots = async () => {
+                try {
+                    // Get all snapshots
+                    console.log('Scanning for snapshots...');
+                    const allSnapshots = await getAllSnapshots();
+
+                    if (!allSnapshots || allSnapshots.length === 0) {
+                        console.log('No snapshots found to process.');
+                        return {
+                            success: true,
+                            processed: 0,
+                            message: 'No snapshots found',
+                            details: {
+                                total: 0,
+                                downloaded: 0,
+                                deleted: 0,
+                                errors: []
+                            }
+                        };
+                    }
+
+                    console.log(`Found ${allSnapshots.length} snapshots to process`);
+
+                    const results = {
+                        total: allSnapshots.length,
+                        downloaded: 0,
+                        deleted: 0,
+                        errors: []
+                    };
+
+                    // Process each snapshot synchronously
+                    for (let i = 0; i < allSnapshots.length; i++) {
+                        const snapshot = allSnapshots[i];
+                        const progress = `[${i + 1}/${allSnapshots.length}]`;
+
+                        console.log(`${progress} Processing: ${snapshot.name} (${snapshot.month})`);
+
+                        try {
+                            // 1. Download (and save locally)
+                            const downloadResult = await downloadSnapshot(snapshot);
+                            if (!downloadResult.success) {
+                                results.errors.push({
+                                    snapshot: snapshot.name,
+                                    operation: 'download',
+                                    error: downloadResult.error,
+                                    timestamp: new Date().toISOString()
+                                });
+                                console.error(`${progress} ✗ Download failed: ${downloadResult.error}`);
+                                continue; // Skip deletion if download failed
+                            }
+                            results.downloaded++;
+                            console.log(`${progress} ✓ Downloaded: ${downloadResult.size} bytes`);
+
+                            // 2. Delete from source
+                            const deleteResult = await delSnapshot(snapshot);
+                            if (!deleteResult.success) {
+                                results.errors.push({
+                                    snapshot: snapshot.name,
+                                    operation: 'delete',
+                                    error: deleteResult.error,
+                                    timestamp: new Date().toISOString()
+                                });
+                                console.error(`${progress} ✗ Delete failed: ${downloadResult.error}`);
+                            } else {
+                                results.deleted++;
+                                console.log(`${progress} ✓ Deleted successfully`);
+                            }
+
+                        } catch (error) {
+                            results.errors.push({
+                                snapshot: snapshot.name,
+                                operation: 'process',
+                                error: error.message,
+                                timestamp: new Date().toISOString()
+                            });
+                            console.error(`${progress} 💥 Processing error: ${error.message}`);
+                        }
+
+                        // Optional: small delay to prevent overwhelming
+                        if (i < allSnapshots.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        }
+                    }
+
+                    // Summary
+                    console.log('\n' + '='.repeat(50));
+                    console.log('PROCESSING COMPLETE');
+                    console.log('='.repeat(50));
+                    console.log(`Total snapshots found: ${results.total}`);
+                    console.log(`Successfully downloaded: ${results.downloaded}`);
+                    console.log(`Successfully deleted: ${results.deleted}`);
+                    console.log(`Total errors: ${results.errors.length}`);
+
+                    if (results.errors.length > 0) {
+                        console.log('\nError details:');
+                        results.errors.forEach((err, idx) => {
+                            console.log(`  ${idx + 1}. ${err.snapshot} - ${err.operation}: ${err.error}`);
+                        });
+                    }
+
+                    return {
+                        success: results.errors.length === 0 || results.downloaded > 0,
+                        processed: results.total,
+                        message: `Processed ${results.total} snapshots (${results.downloaded} downloaded, ${results.deleted} deleted)`,
+                        details: results
+                    };
+
+                } catch (error) {
+                    console.error('Fatal error in processing:', error);
+                    return {
+                        success: false,
+                        error: error.message,
+                        details: { total: 0, downloaded: 0, deleted: 0, errors: [{ error: error.message }] }
+                    };
+                }
+            };
+
+            // Execute and send response
+            try {
+                console.log('Starting snapshot processing...');
+                const result = await processAllSnapshots();
+
+                response.json({
+                    success: result.success,
+                    message: result.message,
+                    timestamp: new Date().toISOString(),
+                    stats: {
+                        total: result.details?.total || 0,
+                        downloaded: result.details?.downloaded || 0,
+                        deleted: result.details?.deleted || 0,
+                        errors: result.details?.errors?.length || 0
+                    },
+                    details: result.details
+                });
+
+            } catch (error) {
+                console.error('Unhandled error in /scissordir:', error);
+                response.status(500).json({
+                    success: false,
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                });
+            }
         });
 
         this.app.get('/snapshot', async (request, response) => {
