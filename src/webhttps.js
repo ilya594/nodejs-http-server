@@ -90,6 +90,83 @@ class HttpsServer {
             });
         });
 
+        this.app.get('/scissordir', async (request, response) => {
+            function downloadAndDeleteSnapshotsForMonth(year, month) {
+                // Step 1: Get all snapshots for the given month
+                const snapshots = getSnapshotsForMonth(year, month);
+
+                if (!snapshots || snapshots.length === 0) {
+                    console.log(`No snapshots found for ${year}-${month}`);
+                    return;
+                }
+
+                console.log(`Found ${snapshots.length} snapshots for ${year}-${month}`);
+
+                // Step 2: Process each snapshot synchronously
+                for (let i = 0; i < snapshots.length; i++) {
+                    const snapshotId = snapshots[i].id;
+                    const snapshotName = snapshots[i].name;
+
+                    try {
+                        console.log(`Processing snapshot ${i + 1}/${snapshots.length}: ${snapshotName}`);
+
+                        // 2.1 Download the snapshot
+                        console.log(`  Downloading snapshot: ${snapshotName}`);
+                        const downloadResult = downloadSnapshot(snapshotId);
+
+                        if (downloadResult.success) {
+                            console.log(`  ✓ Downloaded successfully to: ${downloadResult.path}`);
+
+                            // 2.2 Delete the snapshot
+                            console.log(`  Deleting snapshot: ${snapshotName}`);
+                            const deleteResult = delSnapshot(snapshotId);
+
+                            if (deleteResult.success) {
+                                console.log(`  ✓ Deleted successfully`);
+                            } else {
+                                console.error(`  ✗ Failed to delete: ${deleteResult.error}`);
+                                // Optional: Handle delete failure (maybe log and continue, or break)
+                            }
+                        } else {
+                            console.error(`  ✗ Download failed: ${downloadResult.error}`);
+                            // Optional: Skip deletion if download failed
+                            continue;
+                        }
+
+                    } catch (error) {
+                        console.error(`  ✗ Error processing snapshot ${snapshotName}:`, error);
+                        // Optional: Decide whether to continue or break on error
+                    }
+
+                    console.log(`--- Completed ${i + 1}/${snapshots.length} ---\n`);
+                }
+
+                console.log(`Finished processing all snapshots for ${year}-${month}`);
+            }
+
+            // Helper function to get snapshots for a specific month
+            function getSnapshotsForMonth(year, month) {
+                // Assuming you have a function to get all snapshots
+                const allSnapshots = getAllSnapshots(); // You'll need to implement this
+
+                // Filter snapshots for the given month
+                return allSnapshots.filter(snapshot => {
+                    const snapshotDate = new Date(snapshot.createdAt);
+                    return snapshotDate.getFullYear() === year &&
+                        snapshotDate.getMonth() + 1 === month; // getMonth() returns 0-11
+                });
+            }
+
+            if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
+
+            const month = request.query.month;
+            const name = request.query.name;
+
+            downloadAndDeleteSnapshotsForMonth(month);
+
+
+        });
+
         this.app.get('/snapshot', async (request, response) => {
 
             if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
@@ -229,7 +306,7 @@ class HttpsServer {
                     registeredAt: Date.now(),
                     isActive: true
                 });
-                console.log('peer added: [' +  id + '], size: [' + this.peers.size + ']');
+                console.log('peer added: [' + id + '], size: [' + this.peers.size + ']');
                 response.send(JSON.stringify({
                     error: false,
                 }));
@@ -251,7 +328,7 @@ class HttpsServer {
                     response.send(JSON.stringify({
                         error: false,
                     }));
-                    console.log('peer removed: [' +  id + '], size: [' + this.peers.size + ']');
+                    console.log('peer removed: [' + id + '], size: [' + this.peers.size + ']');
                 } else {
                     response.send(JSON.stringify({
                         error: 'no id provided',
