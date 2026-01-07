@@ -274,6 +274,13 @@ class HttpsServer {
                 }));
             }
         });
+        
+        this.app.get('/healthz', async (_, response) => {
+            console.log('health check ' + new Date().toDateString());
+            response.send(JSON.stringify({
+                    status: 'OK',
+            }));
+        });
     }
 
     start() {
