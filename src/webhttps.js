@@ -24,8 +24,8 @@ const validatePin = async (received) => {
 }
 
 const getPath = (fileName) => {
-    const year = String(fileName).substring(6, 10);
-    const month = String(fileName).substring(3, 5);
+    const year = String(fileName).substring(0, 4);
+    const month = String(fileName).substring(5, 7);
     return path.join(defaultPath, year, monthMap[month], fileName);
 }
 
