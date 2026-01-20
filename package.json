@@ -17,8 +17,9 @@
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
-    "express": "^4.19.2",
+    "express": "^4.22.1",
     "http": "^0.0.1-security",
+    "http-proxy-middleware": "^3.0.5",
     "ws": "^8.18.3"
   }
 }
