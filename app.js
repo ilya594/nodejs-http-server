@@ -13,7 +13,7 @@ const options = { origin: '*', optionsSuccessStatus: 200 };
 
 app.use(cors(options));
 app.use(cors({
-  origin: ['https://namchuk.solar', ,'https://html-peer-viewer.onrender.com', 'http://localhost:3000'],
+  origin: ['https://namchuk.solar', 'https://html-peer-viewer.onrender.com', 'http://localhost:8008'],
   credentials: true
 }));
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
