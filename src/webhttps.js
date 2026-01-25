@@ -224,14 +224,10 @@ class HttpsServer {
                     isActive: true
                 });
                 console.log('peer added: [' + id + '], size: [' + this.peers.size + ']');
-                response.send(JSON.stringify({
-                    error: false,
-                }));
-            } else {
-                response.send(JSON.stringify({
-                    error: 'no id provided',
-                }));
             }
+            response.send({
+                data: Array.from(this.peers.keys())
+            });
         });
 
         this.app.post('/removepeerid', async (request, response) => {
@@ -274,11 +270,11 @@ class HttpsServer {
                 }));
             }
         });
-        
+
         this.app.get('/healthz', async (_, response) => {
             console.log('health check ' + new Date().toDateString());
             response.send(JSON.stringify({
-                    status: 'OK',
+                status: 'OK',
             }));
         });
     }
