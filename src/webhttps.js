@@ -181,7 +181,7 @@ class HttpsServer {
 
         this.app.get('/valprediction', async (request, response) => {
 
-            if (!request.body || ! await validatePin(request.query.pin)) return response.sendStatus(400);
+            if (!request.body /*|| ! await validatePin(request.query.pin)*/) return response.sendStatus(400);
 
             const prediction = request.query.prediction?.pop();
 
