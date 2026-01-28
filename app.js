@@ -42,7 +42,7 @@ wsServer.registerMessageHandler('heartbeat', (client, data) => {
 });
 
 wsServer.registerMessageHandler('getpeers', (client, data) => {
-  client.ws.send(JSON.stringify({ peers: peers.keys() }));
+  client.ws.send(JSON.stringify({ peers: Array.from(peers.keys()) }));
 });
 
 const PEER_LIFETIME = 20000;
