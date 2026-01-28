@@ -100,8 +100,8 @@ wsServer.registerMessageHandler('getpeers', (client, data) => {
   client.ws.send(JSON.stringify({ peers: Array.from(peers.keys()) }));
 });
 
-const PEER_LIFETIME = 20000;
-const SCAN_INTERVAL = 10000;
+const PEER_LIFETIME = 5000;
+const SCAN_INTERVAL = 7000;
 
 setInterval(() => {
   const now = Date.now();
