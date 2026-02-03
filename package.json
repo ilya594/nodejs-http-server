@@ -1,5 +1,5 @@
 {
-  "name": "nodejs-tensorflow-server",
+  "name": "nodejs-http-server",
   "version": "1.0.0",
   "description": "yay",
   "main": "app.js",
@@ -14,7 +14,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@tensorflow/tfjs-node": "4.22.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
@@ -22,7 +21,6 @@
     "http": "^0.0.1-security",
     "http-proxy-middleware": "^3.0.5",
     "node-fetch": "^3.3.0",
-    "face-api": "^0.22.2",
     "ws": "^8.18.3"
   }
 }
