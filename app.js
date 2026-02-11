@@ -20,14 +20,55 @@ app.use(cors({
 }));
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
 
+// Конфигурация
+const MEDIAMTX_URL = 'http://195.137.244.53:8889';
+//const PORT = process.env.PORT || 3000;
+
+// Middleware для CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
+
+// Прокси для камеры
 app.use('/camera', createProxyMiddleware({
-  target: 'http://195.137.244.53:8889',
+  target: MEDIAMTX_URL,
   changeOrigin: true,
-  ws: true,  // важно для WebRTC/WebSocket
   pathRewrite: {
-    '^/camera': '/camera',  // или '' если хочешь /cam → /camera
+    '^/camera': '/camera', // Меняем путь если нужно
   },
+  onProxyReq: (proxyReq, req, res) => {
+    // Можно добавить заголовки аутентификации если нужно
+    // proxyReq.setHeader('Authorization', 'Basic ' + Buffer.from('user:pass').toString('base64'));
+    
+    // Для RTSP/RTMP потоков
+    if (req.url.includes('.m3u8') || req.url.includes('.ts')) {
+      proxyReq.setHeader('Accept', 'application/vnd.apple.mpegurl');
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    // Меняем заголовки ответа
+    delete proxyRes.headers['x-frame-options'];
+    
+    // Для HLS потоков
+    if (req.url.includes('.m3u8')) {
+      proxyRes.headers['content-type'] = 'application/vnd.apple.mpegurl';
+    }
+    
+    // Для MPEG-TS
+    if (req.url.includes('.ts')) {
+      proxyRes.headers['content-type'] = 'video/MP2T';
+    }
+    
+    // Убираем ограничения
+    proxyRes.headers['access-control-allow-origin'] = '*';
+    proxyRes.headers['access-control-expose-headers'] = '*';
+  },
+  logger: console
 }));
+
 
 app.post('/api/webrtc/:camera?', async (req, res) => {
   const camera = req.params.camera || 'camera';
