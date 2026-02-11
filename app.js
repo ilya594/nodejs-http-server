@@ -6,8 +6,10 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const parser = require('body-parser');
+
 const app = express();
+const server = http.createServer(app);
+
 app.use(
   '/camera',
   createProxyMiddleware({
@@ -17,17 +19,18 @@ app.use(
     logLevel: 'debug'
   })
 );
-const server = http.createServer(app);
-//const options = { origin: '*', optionsSuccessStatus: 200 };
 
-//app.use(cors(options));
+const options = { origin: '*', optionsSuccessStatus: 200 };
+app.use(cors(options));
+
+const parser = require('body-parser');
 app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
 
-app.use(cors({
+/*app.use(cors({
   origin: ['https://namchuk.solar', 'https://html-peer-viewer.onrender.com', 'http://localhost:8008'],
   credentials: true
-}));
+}));*/
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
 
 
