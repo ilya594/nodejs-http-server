@@ -8,7 +8,6 @@ const http = require('http');
 const cors = require('cors');
 
 const app = express();
-const server = http.createServer(app);
 
 app.use(
   '/camera',
@@ -92,7 +91,7 @@ const httpsServer = new HttpsServer({ app: app, peers: peers });
 httpsServer.start();
 
 
-const wsServer = new WebSocketServer({ httpServer: server, peers: peers });
+const wsServer = new WebSocketServer({ httpServer: app, peers: peers });
 wsServer.start();
 
 wsServer.registerMessageHandler('heartbeat', (client, data) => {
