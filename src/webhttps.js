@@ -9,7 +9,7 @@ const path = require('path');
 
 const bcrypt = require('bcrypt');
 
-const port = process.env.PORT || 8000;
+const port = process.env.port || 8000;
 
 const auth = process.env.auth || 2;
 //const host = 'localhost';
