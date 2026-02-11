@@ -6,43 +6,28 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-
-const app = express();
-
-app.use(
-  '/camera',
-  createProxyMiddleware({
-    target: 'http://195.137.244.53:8889',
-    changeOrigin: true,
-    ws: true,
-    logLevel: 'debug'
-  })
-);
-
-const options = { origin: '*', optionsSuccessStatus: 200 };
-app.use(cors(options));
-
 const parser = require('body-parser');
+const app = express();
+const server = http.createServer(app);
+const options = { origin: '*', optionsSuccessStatus: 200 };
+
+app.use(cors(options));
 app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
 
-/*app.use(cors({
+app.use(cors({
   origin: ['https://namchuk.solar', 'https://html-peer-viewer.onrender.com', 'http://localhost:8008'],
   credentials: true
-}));*/
+}));
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
-
-
-
-
 
 
 app.post('/api/webrtc/:camera?', async (req, res) => {
   const camera = req.params.camera || 'camera';
   const mediaMtxUrl = `http://195.137.244.53:8889/${camera}/whep`;
-
+  
   console.log(`🎥 WebRTC прокси: ${camera} -> ${mediaMtxUrl}`);
-
+  
   try {
     // Пересылаем SDP offer на MediaMTX
     const response = await fetch(mediaMtxUrl, {
@@ -54,29 +39,29 @@ app.post('/api/webrtc/:camera?', async (req, res) => {
       body: req.body,
       timeout: 10000 // 10 секунд таймаут
     });
-
+    
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ MediaMTX ошибка: ${response.status}`, errorText);
       throw new Error(`MediaMTX: ${response.status} - ${errorText}`);
     }
-
+    
     // Получаем SDP answer
     const sdpAnswer = await response.text();
     console.log(`✅ WebRTC прокси успешен (${sdpAnswer.length} байт)`);
-
+    
     // Возвращаем ответ клиенту
     res.set({
       'Content-Type': 'application/sdp',
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'no-cache, no-store'
     });
-
+    
     res.send(sdpAnswer);
-
+    
   } catch (error) {
     console.error('🔥 WebRTC прокси ошибка:', error.message);
-    res.status(500).json({
+    res.status(500).json({ 
       error: 'WebRTC proxy failed',
       details: error.message,
       camera,
@@ -91,7 +76,7 @@ const httpsServer = new HttpsServer({ app: app, peers: peers });
 httpsServer.start();
 
 
-const wsServer = new WebSocketServer({ httpServer: app, peers: peers });
+const wsServer = new WebSocketServer({ httpServer: server, peers: peers });
 wsServer.start();
 
 wsServer.registerMessageHandler('heartbeat', (client, data) => {
