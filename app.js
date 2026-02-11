@@ -36,9 +36,9 @@ app.use((req, res, next) => {
 app.use('/camera', createProxyMiddleware({
   target: MEDIAMTX_URL,
   changeOrigin: true,
-  pathRewrite: {
-    '^/camera': '/camera', // Меняем путь если нужно
-  },
+  //pathRewrite: {
+  //  '^/camera': '/camera', // Меняем путь если нужно
+  //},
   onProxyReq: (proxyReq, req, res) => {
     // Можно добавить заголовки аутентификации если нужно
     // proxyReq.setHeader('Authorization', 'Basic ' + Buffer.from('user:pass').toString('base64'));
