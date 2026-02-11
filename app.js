@@ -10,6 +10,15 @@ const parser = require('body-parser');
 const app = express();
 const server = http.createServer(app);
 const options = { origin: '*', optionsSuccessStatus: 200 };
+app.use(
+  '/camera',
+  createProxyMiddleware({
+    target: 'http://195.137.244.53:8889',
+    changeOrigin: true,
+    ws: true,
+    logLevel: 'debug'
+  })
+);
 app.use(cors(options));
 app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
@@ -20,16 +29,9 @@ app.use(cors({
 }));
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
 
-app.use(
-  '/',
-  createProxyMiddleware({
-    target: 'http://195.137.244.53:8889',
-    changeOrigin: true,
-    ws: true
-  })
-);
 
-app.set('trust proxy', 1);
+
+
 
 
 app.post('/api/webrtc/:camera?', async (req, res) => {
