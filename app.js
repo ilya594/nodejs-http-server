@@ -8,8 +8,6 @@ const http = require('http');
 const cors = require('cors');
 const parser = require('body-parser');
 const app = express();
-const server = http.createServer(app);
-const options = { origin: '*', optionsSuccessStatus: 200 };
 app.use(
   '/camera',
   createProxyMiddleware({
@@ -19,7 +17,10 @@ app.use(
     logLevel: 'debug'
   })
 );
-app.use(cors(options));
+const server = http.createServer(app);
+//const options = { origin: '*', optionsSuccessStatus: 200 };
+
+//app.use(cors(options));
 app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
 
