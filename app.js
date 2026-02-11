@@ -21,7 +21,7 @@ app.use(cors({
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
 
 // Конфигурация
-const MEDIAMTX_URL = 'http://195.137.244.53:8889';
+const MEDIAMTX_URL = 'http://195.137.244.53:8889/camera';
 //const PORT = process.env.PORT || 3000;
 
 // Middleware для CORS
