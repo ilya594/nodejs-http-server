@@ -12,13 +12,15 @@ const bcrypt = require('bcrypt');
 const port = process.env.port || 8000;
 
 const auth = process.env.auth || 2;
+
+const pin = process.env.pin || '4176'; //TODO put to env
 //const host = 'localhost';
 
 
 
 const validatePin = async (received) => {
     const hash = received?.toString() || '';
-    const pin = process.env.pin.toString();
+    const pin = pin.toString();
     const result = await bcrypt.compare(pin, hash);
     return result;
 }
@@ -41,7 +43,7 @@ const handlePath = (filePath) => {
 
 const year = '2026';
 
-const defaultPath = './../../../../var/data/snapshots/';
+const defaultPath = './data/snapshots/';
 
 const monthMap = {
     '01': 'January', '02': 'February', '03': 'March',
