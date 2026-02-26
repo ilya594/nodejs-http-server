@@ -10,6 +10,7 @@ class HLSStreamWithDetector {
     this.frameCallback = null;
     this.frameSkip = detectorConfig.frameSkip || 5;
     this.frameCounter = 0;
+    this.saveEnabled  = detectorConfig.saveEnabled || true;
     
     // Создаем временную папку если нужно
     const fs = require('fs');
