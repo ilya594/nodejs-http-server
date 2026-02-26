@@ -19,7 +19,7 @@ app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(cors({
-  origin: ['https://namchuk.solar', 'https://html-peer-viewer.onrender.com', 'http://localhost:8008'],
+  origin: ['https://namchuk.solar', 'https://html-peer-viewer.onrender.com', 'http://localhost:8008', 'http://195.137.244.53:8000'],
   credentials: true
 }));
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
