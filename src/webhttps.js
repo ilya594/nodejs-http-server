@@ -20,8 +20,7 @@ const pin = process.env.pin || '4176'; //TODO put to env
 
 const validatePin = async (received) => {
     const hash = received?.toString() || '';
-    const pin = pin.toString();
-    const result = await bcrypt.compare(pin, hash);
+    const result = await bcrypt.compare(pin.toString(), hash);
     return result;
 }
 
