@@ -26,7 +26,7 @@ class HLSStreamWithDetector {
     this.detectionEndTime = null;
     this.detectionActive = false;
     this.detectionTimeout = null;
-    this.savePath = './detections';     // куда класть готовые клипы
+    this.savePath = '/var/www/detections';     // куда класть готовые клипы
     this.maxClipDuration = 10;                // максимальная длительность одного клипа (секунды)
     this.detectionsBuffer = [];               // массив всех детекций за текущий эпизод
     this.clipStartTime = null;                // начало текущего клипа
