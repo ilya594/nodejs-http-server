@@ -87,7 +87,8 @@ class HttpsServer {
 
         this.app.get('/getsnapshotslist', async (request, response) => {
             try {
-                const dir = path.join(__dirname, 'detections');
+                const dir = path.join('/var/www/', 'detections');
+                console.log('reading directory: ' + dir);
                 const files = await fs.promises.readdir(dir);
                 response.json(files);
             } catch (err) {
