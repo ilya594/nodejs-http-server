@@ -85,6 +85,19 @@ class HttpsServer {
             });
         });
 
+        this.app.get('/getsnapshotslist', async (request, response) => {
+            try {
+                const dir = path.join(__dirname, 'detections');
+                const files = await fs.promises.readdir(dir);
+                response.json(files);
+            } catch (err) {
+                console.error(err);
+                response.status(500).json({ error: 'Не удалось прочитать папку' });
+            }
+        })
+
+        app.use('/detections', express.static(path.join(__dirname, 'detections')));
+
         this.app.get('/snapshot', async (request, response) => {
 
             if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
