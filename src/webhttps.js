@@ -96,7 +96,7 @@ class HttpsServer {
             }
         })
 
-        app.use('/detections', express.static(path.join(__dirname, 'detections')));
+        this.app.use('/detections', express.static(path.join(__dirname, 'detections')));
 
         this.app.get('/snapshot', async (request, response) => {
 
