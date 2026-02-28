@@ -13,6 +13,7 @@ const parser = require('body-parser');
 const app = express();
 const server = http.createServer(app);
 const options = { origin: '*', optionsSuccessStatus: 200 };
+const path = require('path');
 
 app.use(cors(options));
 app.use(parser.json({ limit: '50mb' }));
