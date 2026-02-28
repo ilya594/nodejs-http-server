@@ -23,7 +23,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.text({ type: 'application/sdp' })); // Для SDP данных
-
+app.use('/detections', express.static(path.join(__dirname, 'detections')));
 
 app.post('/api/webrtc/:camera?', async (req, res) => {
   await handleWebRTCProxy(req, res);

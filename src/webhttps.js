@@ -96,8 +96,6 @@ class HttpsServer {
             }
         })
 
-        this.app.use('/detections', express.static(path.join(__dirname, 'detections')));
-
         this.app.get('/snapshot', async (request, response) => {
 
             if (!request.body || !await validatePin(request.query.pin)) return response.sendStatus(400);
