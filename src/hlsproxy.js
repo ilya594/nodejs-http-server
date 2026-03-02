@@ -122,7 +122,8 @@ class HLSStreamWithDetector {
     });
 
     this.process.on('close', (code) => {
-      console.log(`FFmpeg process closed with code ${code}`);
+      console.log(`FFmpeg process closed with code ${code}...restarting in 10seconds..`);
+      setTimeout(() => this.start(), 10000);
     });
   }
 
