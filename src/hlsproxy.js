@@ -4,11 +4,9 @@ const Detector = require('./obdetection');
 const fs = require('fs');
 const path = require('path');
 
-
-
 class HLSStreamWithDetector {
   constructor(cameraName = 'camera', detectorConfig = {}) {
-    this.playlistUrl = `http://195.137.244.53:8888/${cameraName}/index.m3u8`;
+       this.playlistUrl = `http://195.137.244.53:8888/${cameraName}/index.m3u8`;
     this.tempDir = './temp_hls';
     this.detector = new Detector(detectorConfig);
     this.frameCallback = null;
@@ -18,18 +16,24 @@ class HLSStreamWithDetector {
     this.lastSaveTime = 0;
     this.saveCooldown = detectorConfig.saveCooldown || 3;
 
+    // НОВЫЕ ПАРАМЕТРЫ ДЛЯ СОХРАНЕНИЯ СЕТКИ
+    this.gridXCount = detectorConfig.xcount || 5;      // количество кадров по горизонтали
+    this.gridYCount = detectorConfig.ycount || 5;      // количество кадров по вертикали
+    this.gridBuffer = [];                               // буфер для накопления кадров
+    this.gridSaveEnabled = detectorConfig.gridSaveEnabled || true; // включить/выключить режим сетки
+
     this.preBufferSec = 5;
     this.postBufferSec = 5;
-    this.segmentDuration = 3;           // секунды на сегмент — удобно 2-4 с
-    this.bufferSegmentsCount = 10;       // ~18 с буфера (хватит с запасом)
+    this.segmentDuration = 3;
+    this.bufferSegmentsCount = 10;
     this.detectionStartTime = null;
     this.detectionEndTime = null;
     this.detectionActive = false;
     this.detectionTimeout = null;
-    this.savePath = '/var/www/detections';     // куда класть готовые клипы
-    this.maxClipDuration = 10;                // максимальная длительность одного клипа (секунды)
-    this.detectionsBuffer = [];               // массив всех детекций за текущий эпизод
-    this.clipStartTime = null;                // начало текущего клипа
+    this.savePath = '/var/www/detections';
+    this.maxClipDuration = 10;
+    this.detectionsBuffer = [];
+    this.clipStartTime = null;
 
     if (!fs.existsSync(this.savePath)) fs.mkdirSync(this.savePath, { recursive: true });
     if (!fs.existsSync(this.tempDir)) fs.mkdirSync(this.tempDir, { recursive: true });
@@ -39,25 +43,24 @@ class HLSStreamWithDetector {
     console.log('🔄 Initializing detector...');
     await this.detector.initialize();
     this.start();
-    //this.startBufferRecorder();
     console.log('✅ Detector ready');
+    console.log(`📸 Grid save mode: ${this.gridSaveEnabled ? 'ENABLED' : 'DISABLED'} (${this.gridXCount}x${this.gridYCount} grid)`);
   }
 
   startBufferRecorder() {
     const { spawn } = require('child_process');
 
     console.log('Starting circular HLS buffer for pre/post recording...');
-    //delete_segments+
     this.bufferProcess = spawn('ffmpeg', [
       '-i', this.playlistUrl,
-      '-c:v', 'copy',                // без перекодирования — быстро и качественно
+      '-c:v', 'copy',
       '-c:a', 'copy',
       '-f', 'hls',
       '-hls_time', this.segmentDuration.toString(),
       '-hls_list_size', this.bufferSegmentsCount.toString(),
       '-hls_flags', 'append_list+discont_start',
       '-hls_segment_filename', path.join(path.resolve(this.tempDir), 'buf_%03d.ts'),
-      '-hls_playlist_type', 'vod',   // или event, но delete_segments важнее
+      '-hls_playlist_type', 'vod',
       path.join(path.resolve(this.tempDir), 'buffer.m3u8')
     ]);
 
@@ -68,7 +71,6 @@ class HLSStreamWithDetector {
     this.bufferProcess.on('close', (code, signal) => {
       if (code !== 0 && code !== null) {
         console.error(`Buffer FFmpeg failed with code ${code} (signal: ${signal})`);
-        // Попробуй перезапустить через 10 с
         setTimeout(() => this.startBufferRecorder(), 10000);
       }
     });
@@ -90,7 +92,6 @@ class HLSStreamWithDetector {
     this.pixelFormat = pixelFormat;
     console.log(`📡 Connecting to HLS stream: ${this.playlistUrl}`);
 
-    // FFmpeg для чтения HLS и конвертации в raw video
     this.process = spawn('ffmpeg', [
       '-i', this.playlistUrl,
       '-f', 'image2pipe',
@@ -102,7 +103,7 @@ class HLSStreamWithDetector {
     ]);
 
     let frameBuffer = Buffer.alloc(0);
-    const frameSize = width * height * 3; // 3 канала для BGR
+    const frameSize = width * height * 3;
 
     this.process.stdout.on('data', (data) => {
       frameBuffer = Buffer.concat([frameBuffer, data]);
@@ -111,13 +112,11 @@ class HLSStreamWithDetector {
         const frameData = frameBuffer.slice(0, frameSize);
         frameBuffer = frameBuffer.slice(frameSize);
 
-        // Обрабатываем кадр в детекторе
         this.processFrame(frameData, width, height);
       }
     });
 
     this.process.stderr.on('data', (data) => {
-      // FFmpeg логи (можно отключить если мешают)
       // console.log(`FFmpeg: ${data.toString()}`);
     });
 
@@ -127,78 +126,26 @@ class HLSStreamWithDetector {
     });
   }
 
-  /*async processFrame(frameData, width, height) {
-    this.frameCounter++;
-    if (this.frameCounter % this.frameSkip !== 0) return;
-
-    try {
-      const detections = await this.detector.detectFromBuffer(frameData, width, height);
-      const now = Date.now() / 1000;
-
-      if (detections.length > 0) {
-        // Добавляем все детекции в буфер (с текущим временем)
-        detections.forEach(det => {
-          this.detectionsBuffer.push({
-            timestamp: now,
-            className: det.className,
-            score: det.score,
-            bbox: det.bbox,
-            inferenceTime: det.inferenceTime
-          });
-        });
-
-        if (!this.detectionActive) {
-          this.detectionActive = true;
-          this.detectionStartTime = now;
-          this.clipStartTime = now - this.preBufferSec; // начало клипа с pre-buffer
-          console.log(`[Detection] Started at ${new Date(now * 1000).toISOString()}`);
-        }
-
-        this.detectionEndTime = now;
-
-        // Проверяем, не пора ли разбить на новый клип
-        if (now - this.clipStartTime >= this.maxClipDuration) {
-          // Сохраняем текущий клип (до текущего момента)
-          await this.finalizeAndSaveClip(this.clipStartTime, now);
-          // Начинаем новый клип с небольшим перекрытием (например, 2 секунды)
-          this.clipStartTime = now - 2;
-        }
-
-        // Сбрасываем/обновляем таймер пост-буфера
-        if (this.detectionTimeout) clearTimeout(this.detectionTimeout);
-        this.detectionTimeout = setTimeout(() => this.finalizeAndSaveClip(this.clipStartTime, this.detectionEndTime + this.postBufferSec), (this.postBufferSec + 2) * 1000);
-      }
-
-      if (this.frameCallback) {
-        this.frameCallback(detections, frameData, width, height);
-      }
-    } catch (err) {
-      console.error('Detection error in processFrame:', err);
-    }
-  }*/
-
   async processFrame(frameData, width, height) {
     this.frameCounter++;
 
-    // Пропускаем кадры для производительности
     if (this.frameCounter % this.frameSkip !== 0) {
       return;
     }
 
     try {
-      // Конвертируем raw данные в формат для детектора
-      // Вариант А: если детектор принимает буфер напрямую
       const detections = await this.detector.detectFromBuffer(frameData);
-
-      // Вариант Б: если нужно собрать изображение
-      // const { RawImage } = require('@xenova/transformers');
-      // const image = new RawImage(frameData, width, height, 3);
-      // const detections = await this.detector._detect(image);
 
       if (detections.length > 0) {
         console.log(`[Frame ${this.frameCounter}] Found ${detections.length} objects`);
-        await this.checkAndSaveFrame(frameData, detections);
-        // Вызываем колбэк если есть
+
+        // ИЗМЕНЕНО: проверяем режим сохранения
+        if (this.gridSaveEnabled) {
+          await this.addFrameToGrid(frameData, detections);
+        } else {
+          await this.checkAndSaveFrame(frameData, detections);
+        }
+
         if (this.frameCallback) {
           this.frameCallback(detections, frameData, width, height);
         }
@@ -207,14 +154,233 @@ class HLSStreamWithDetector {
       console.error('Detection error:', error);
     }
   }
+  /**
+   * НОВЫЙ МЕТОД: Добавляет кадр в буфер сетки и сохраняет при накоплении
+   */
+  async addFrameToGrid(frameData, detections) {
+    if (!this.saveEnabled) return false;
+
+    const now = Date.now() / 1000;
+
+    // Проверяем cooldown для предотвращения слишком частых сохранений
+    if (now - this.lastSaveTime < this.saveCooldown) {
+      return false;
+    }
+
+    // Добавляем кадр в буфер с метаданными
+    this.gridBuffer.push({
+      data: frameData,
+      detections: detections,
+      timestamp: now,
+      datetime: new Date().toISOString(), // Добавляем полную дату для формирования имени
+      frameNumber: this.frameCounter
+    });
+
+    console.log(`📸 Added frame to grid buffer (${this.gridBuffer.length}/${this.gridXCount * this.gridYCount})`);
+
+    // Если набрали достаточно кадров - сохраняем сетку
+    if (this.gridBuffer.length >= this.gridXCount * this.gridYCount) {
+      await this.saveGridImage();
+      this.gridBuffer = []; // Очищаем буфер
+      this.lastSaveTime = now;
+      return true;
+    }
+
+    return false;
+  }
 
   /**
- * Проверяет нужно ли сохранить кадр и сохраняет если нужно
- */
+   * НОВЫЙ МЕТОД: Сохраняет сетку из накопленных кадров
+   */
+  async saveGridImage() {
+    try {
+      // Получаем дату первого и последнего кадра в буфере
+      const firstFrame = this.gridBuffer[0];
+      const lastFrame = this.gridBuffer[this.gridBuffer.length - 1];
+
+      // Форматируем даты для имени файла: YYYY-MM-DD_HH-MM-SS
+      const formatDateForFilename = (isoString) => {
+        return isoString
+          .replace(/[:.]/g, '-')     // Заменяем : и . на -
+          .replace('T', '_')          // Заменяем T на _
+          .substring(0, 19);          // Оставляем только YYYY-MM-DD_HH-MM-SS
+      };
+
+      const startDateStr = formatDateForFilename(firstFrame.datetime);
+      const endDateStr = formatDateForFilename(lastFrame.datetime);
+
+      // Собираем все уникальные классы из всех кадров в буфере
+      const allClasses = new Set();
+      this.gridBuffer.forEach(item => {
+        item.detections.forEach(d => allClasses.add(d.className));
+      });
+      const detectedStr = Array.from(allClasses).join('_') || 'empty';
+
+      // Новый формат имени: [первая дата]-[последняя дата]_grid_объекты.jpg
+      const filename = `[${startDateStr}]-[${endDateStr}]_grid_${this.gridXCount}x${this.gridYCount}_${detectedStr}.jpg`;
+      const filepath = path.join(this.savePath, filename);
+
+      // Создаем сетку из кадров
+      await this.createGridImage(filepath);
+
+      // Сохраняем метаданные для всех кадров в сетке
+      const infoFile = filepath.replace('.jpg', '.json');
+      const info = {
+        timestamp: new Date().toISOString(),
+        gridSize: `${this.gridXCount}x${this.gridYCount}`,
+        camera: this.playlistUrl,
+        resolution: `${this.width}x${this.height}`,
+        timeRange: {
+          start: firstFrame.datetime,
+          end: lastFrame.datetime
+        },
+        frames: this.gridBuffer.map(item => ({
+          frameNumber: item.frameNumber,
+          datetime: item.datetime,
+          timestamp: item.timestamp,
+          detections: item.detections.map(d => ({
+            className: d.className,
+            score: d.score,
+            bbox: d.bbox
+          }))
+        }))
+      };
+
+      fs.writeFileSync(infoFile, JSON.stringify(info, null, 2));
+
+      console.log(`💾 Saved grid image: ${filename} (${this.gridBuffer.length} frames, ${allClasses.size} object types)`);
+      console.log(`   Time range: ${startDateStr} → ${endDateStr}`);
+      return filepath;
+
+    } catch (error) {
+      console.error('❌ Failed to save grid image:', error);
+      return null;
+    }
+  }
+
+  /**
+   * НОВЫЙ МЕТОД: Создает изображение-сетку из буфера кадров
+   */
+  async createGridImage(outputPath) {
+    return new Promise((resolve, reject) => {
+      // Рассчитываем размеры выходного изображения
+      const gridWidth = this.width * this.gridXCount;
+      const gridHeight = this.height * this.gridYCount;
+
+      // Создаем временную директорию для отдельных кадров
+      const tempDir = path.join(this.tempDir, 'grid_temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      // Сохраняем каждый кадр из буфера как временный файл
+      const tempFiles = [];
+      const savePromises = this.gridBuffer.map((item, index) => {
+        const tempFile = path.join(tempDir, `frame_${index.toString().padStart(3, '0')}.jpg`);
+        tempFiles.push(tempFile);
+        return this.convertRawToJPEG(item.data, tempFile);
+      });
+
+      // Ждем сохранения всех временных файлов
+      Promise.all(savePromises)
+        .then(() => {
+          // Создаем фильтр для ffmpeg для создания сетки
+          // Сложный фильтр: берем все входные файлы и размещаем их в сетке
+          const filterComplex = [];
+
+          // Добавляем каждый кадр как отдельный поток
+          for (let i = 0; i < tempFiles.length; i++) {
+            filterComplex.push(`[${i}:v] setpts=PTS, scale=${this.width}:${this.height} [img${i}]`);
+          }
+
+          // Создаем сетку из всех кадров
+          const gridLayout = [];
+          for (let row = 0; row < this.gridYCount; row++) {
+            for (let col = 0; col < this.gridXCount; col++) {
+              const idx = row * this.gridXCount + col;
+              if (idx < tempFiles.length) {
+                gridLayout.push(`[img${idx}]`);
+              }
+            }
+          }
+
+          // Соединяем все в одну команду
+          // Используем hstack/vstack для создания сетки
+          let layoutFilter = '';
+          if (this.gridYCount === 1) {
+            // Только горизонтальное объединение
+            layoutFilter = `${gridLayout.join('')} hstack=inputs=${tempFiles.length}`;
+          } else {
+            // Сначала объединяем по горизонтали в строки, потом по вертикали
+            const rowFilters = [];
+            for (let row = 0; row < this.gridYCount; row++) {
+              const rowInputs = [];
+              for (let col = 0; col < this.gridXCount; col++) {
+                const idx = row * this.gridXCount + col;
+                if (idx < tempFiles.length) {
+                  rowInputs.push(`[img${idx}]`);
+                }
+              }
+              if (rowInputs.length > 0) {
+                rowFilters.push(`${rowInputs.join('')} hstack=inputs=${rowInputs.length}[row${row}]`);
+              }
+            }
+
+            // Объединяем строки по вертикали
+            const rowRefs = [];
+            for (let row = 0; row < rowFilters.length; row++) {
+              rowRefs.push(`[row${row}]`);
+            }
+            layoutFilter = rowFilters.join(';') + ';' + rowRefs.join('') + ` vstack=inputs=${rowRefs.length}`;
+          }
+
+          const ffmpegArgs = [
+            ...tempFiles.flatMap(file => ['-i', file]),
+            '-filter_complex', layoutFilter,
+            '-frames:v', '1',
+            '-q:v', '2',
+            '-y',
+            outputPath
+          ];
+
+          console.log('Creating grid with ffmpeg...');
+
+          const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+          ffmpeg.stderr.on('data', (data) => {
+            // Можно закомментировать если не нужно видеть прогресс
+            // console.log(`FFmpeg grid: ${data.toString().trim()}`);
+          });
+
+          ffmpeg.on('error', (err) => {
+            reject(err);
+          });
+
+          ffmpeg.on('close', (code) => {
+            // Очищаем временные файлы
+            tempFiles.forEach(file => {
+              try { fs.unlinkSync(file); } catch (e) { }
+            });
+
+            if (code === 0) {
+              console.log(`✅ Grid image created: ${outputPath}`);
+              resolve(outputPath);
+            } else {
+              reject(new Error(`FFmpeg grid creation failed with code ${code}`));
+            }
+          });
+        })
+        .catch(reject);
+    });
+  }
+
+  /**
+   * ОРИГИНАЛЬНЫЙ МЕТОД: сохранение одного кадра (оставлен для обратной совместимости)
+   */
   async checkAndSaveFrame(frameData, detections) {
     if (!this.saveEnabled) return false;
 
-    const now = Date.now() / 1000; // текущее время в секундах
+    const now = Date.now() / 1000;
 
     if (now - this.lastSaveTime < this.saveCooldown) {
       return false;
@@ -226,15 +392,12 @@ class HLSStreamWithDetector {
     return true;
   }
 
-
   async saveFrame(frameData, detections = []) {
     try {
-      // Генерируем имя файла
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const detectedStr = Array.from(new Set(detections.map(d => d.className))).join('_');
       const filename = `${timestamp}_frame${this.frameCounter}_${detectedStr}.jpg`;
       const filepath = path.join(this.savePath, filename);
-
 
       await this.convertRawToJPEG(frameData, filepath);
 
@@ -286,7 +449,7 @@ class HLSStreamWithDetector {
     }
     const ffmpegArgs = [
       '-i', path.join(path.resolve(this.tempDir), 'buffer.m3u8'),
-      '-ss', Math.max(0, (Date.now() / 1000 - clipEnd)).toFixed(1), // смещение от текущего момента назад
+      '-ss', Math.max(0, (Date.now() / 1000 - clipEnd)).toFixed(1),
       '-t', duration.toFixed(1),
       '-c', 'copy',
       '-y',
@@ -322,8 +485,6 @@ class HLSStreamWithDetector {
   }
 
   resetDetection() {
-    // Очищаем буфер только когда весь эпизод детекции закончился
-    // (после последнего клипа)
     this.detectionActive = false;
     this.detectionStartTime = null;
     this.detectionEndTime = null;
@@ -332,7 +493,6 @@ class HLSStreamWithDetector {
       clearTimeout(this.detectionTimeout);
       this.detectionTimeout = null;
     }
-    // Буфер очищаем только если нет активной детекции
     if (!this.detectionActive) {
       this.detectionsBuffer = [];
     }
@@ -341,7 +501,6 @@ class HLSStreamWithDetector {
   saveMetadata(mp4Path, startTime, endTime) {
     const metaPath = mp4Path.replace('.mp4', '.json');
 
-    // Фильтруем детекции, которые попали в интервал этого клипа
     const clipDetections = this.detectionsBuffer.filter(det =>
       det.timestamp >= startTime && det.timestamp <= endTime
     );
@@ -363,7 +522,7 @@ class HLSStreamWithDetector {
     return new Promise((resolve, reject) => {
       const ffmpeg = spawn('ffmpeg', [
         '-f', 'rawvideo',
-        '-pix_fmt', 'bgr24',         // У тебя BGR24 в основном потоке, но здесь rgb24 — проверь!
+        '-pix_fmt', 'bgr24',
         '-s', `${this.width}x${this.height}`,
         '-i', 'pipe:0',
         '-frames:v', '1',
@@ -372,7 +531,6 @@ class HLSStreamWithDetector {
         outputPath
       ]);
 
-      // Логируем ошибки FFmpeg — ОБЯЗАТЕЛЬНО!
       ffmpeg.stderr.on('data', (data) => {
         console.error(`FFmpeg STDERR (save frame): ${data.toString().trim()}`);
       });
@@ -389,13 +547,11 @@ class HLSStreamWithDetector {
         }
       });
 
-      // Проверяем, можно ли писать
       if (ffmpeg.stdin.destroyed || ffmpeg.killed) {
         reject(new Error('FFmpeg stdin already closed or process killed'));
         return;
       }
 
-      // Пишем данные
       ffmpeg.stdin.write(rawData, (err) => {
         if (err) {
           console.error('Write error:', err);
@@ -403,7 +559,6 @@ class HLSStreamWithDetector {
           return;
         }
 
-        // Только после успешной записи — end()
         ffmpeg.stdin.end();
       });
     });
