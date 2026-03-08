@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
-var CHAT_FILE = path.join(__dirname, 'chat.json');
+var CHAT_FILE = path.join('/var/www', 'chat.json');
 var MAX_MESSAGES = 100;
 
 // Загружаем сообщения при старте
@@ -67,6 +67,28 @@ chatRouter.post('/clear', (req, res) => {
     } else {
         res.status(403).json({ error: 'Unauthorized' });
     }
+});
+
+chatRouter.delete('/messages/:id', (req, res) => {
+    const messageId = req.params.id;
+    const { username } = req.body;
+    
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    
+    if (messageIndex === -1) {
+        return res.status(404).json({ error: 'Message not found' });
+    }
+    
+    // Проверяем, что удаляет автор
+    if (messages[messageIndex].username !== username) {
+        return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+    
+    // Удаляем сообщение
+    messages.splice(messageIndex, 1);
+    saveMessages();
+    
+    res.json({ success: true });
 });
 
 module.exports = {
