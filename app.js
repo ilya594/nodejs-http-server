@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 const options = { origin: '*', optionsSuccessStatus: 200 };
 const path = require('path');
-
+const { chatRouter } = require('./src/chatrouter'); // файл с твоим кодом
 app.use(cors(options));
 app.use(parser.json({ limit: '50mb' }));
 app.use(parser.urlencoded({ limit: '50mb', extended: true }));
@@ -29,6 +29,9 @@ app.use('/detections', express.static(path.join(__dirname, 'detections')));
 app.post('/api/webrtc/:camera?', async (req, res) => {
   await handleWebRTCProxy(req, res);
 });
+
+
+app.use('/api/chat', chatRouter);
 
 var peers = new Map();
 
@@ -55,6 +58,8 @@ wsServer.registerMessageHandler('heartbeat', (client, data) => {
     });
   }
 });
+
+app.use('/api/chat', chatRouter);
 
 wsServer.registerMessageHandler('getpeers', (client, data) => {
   client.ws.send(JSON.stringify({ peers: Array.from(peers.keys()) }));
