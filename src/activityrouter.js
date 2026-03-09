@@ -23,13 +23,28 @@ function parseSnapshotDate(filename) {
     return null;
 }
 
+activityRouter.get('/snapshots/all', (req, res) => {
+    fs.readdir(SNAPSHOTS_DIR, (err, files) => {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to read snapshots directory' });
+        }
+
+        const images = files.filter(f =>
+            f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
+        );
+
+        console.log(`[Server] Returning ${images.length} total snapshots`);
+        res.json(images);
+    });
+});
+
 activityRouter.get('/activity', (req, res) => {
     console.log('[NServer] Getting activity data...');
-    
+
     try {
         fs.readdir(SNAPSHOTS_DIR, (err, files) => {
             console.log(`[NServer] Reading directory: ${SNAPSHOTS_DIR}`);
-            
+
             if (err) {
                 console.error('[NServer] Error reading snapshots directory:', err);
                 return res.status(500).json({ error: 'Failed to read snapshots' });
@@ -39,14 +54,14 @@ activityRouter.get('/activity', (req, res) => {
             const snapshots = files.filter(f =>
                 f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
             );
-            
+
             console.log(`[NServer] Found ${snapshots.length} snapshots`);
 
             // ИСПРАВЛЕНО: Определяем начало и конец текущих суток
             const now = new Date();
             const startOfDay = new Date(now);
             startOfDay.setHours(0, 0, 0, 0); // Начало дня 00:00:00
-            
+
             const endOfDay = new Date(now);
             endOfDay.setHours(23, 59, 59, 999); // Конец дня 23:59:59
 
@@ -69,17 +84,17 @@ activityRouter.get('/activity', (req, res) => {
             // Обрабатываем снапшоты
             snapshots.forEach(filename => {
                 const snapshotDate = parseSnapshotDate(filename);
-                
+
                 if (snapshotDate) {
                     // Проверяем, попадает ли в сегодняшний день
                     if (snapshotDate >= startOfDay && snapshotDate <= endOfDay) {
                         const hour = snapshotDate.getHours(); // 0-23
-                        
+
                         // ИСПРАВЛЕНО: Проверяем что hour в допустимом диапазоне
                         if (hour >= 0 && hour < 24) {
                             hourlyData[hour].count++;
                             hourlyData[hour].snapshots.push(`/snapshots/${filename}`);
-                            
+
                             console.log(`[NServer] File: ${filename} -> hour ${hour}, count: ${hourlyData[hour].count}`);
                         }
                     }
