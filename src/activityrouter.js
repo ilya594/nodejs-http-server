@@ -8,20 +8,19 @@ const SNAPSHOTS_DIR = '/var/www/detections/'; // путь к твоим снеп
 
 // Вспомогательная функция для парсинга даты из имени файла
 function parseSnapshotDate(filename) {
-    // Формат: [2026-03-09_11-54-29]-[2026-03-09_11-55-27].jpeg
+    // Формат: [2026-02-28_06-25-29]-[2026-02-28_07-06-11].jpg
     const match = filename.match(/\[(.*?)\]-\[(.*?)\]/);
-
+    
     if (match) {
-        const startDateStr = match[1]; // "2026-03-09_11-54-29"
+        const startDateStr = match[1]; // "2026-02-28_06-25-29"
         const [datePart, timePart] = startDateStr.split('_');
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute, second] = timePart.split('-').map(Number);
-
-        // ВАЖНО: создаем дату с учетом локального часового пояса
-        // Используем конструктор с локальными значениями
+        
         return new Date(year, month - 1, day, hour, minute, second);
     }
-
+    
+    // Если имя не соответствует формату, используем время создания файла
     return null;
 }
 
@@ -38,14 +37,14 @@ activityRouter.get('/activity', (req, res) => {
             }
 
             // Фильтруем только изображения
-            const snapshots = files.filter(f =>
+            const snapshots = files.filter(f => 
                 f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
             );
 
             // Группируем по часам (последние 24 часа)
             const now = new Date();
             const hourlyData = new Map();
-
+            
             // Инициализируем все 24 часа нулями
             for (let i = 0; i < 24; i++) {
                 const hour = new Date(now);
@@ -60,50 +59,38 @@ activityRouter.get('/activity', (req, res) => {
             }
 
             // Обрабатываем каждый снапшот
-            // Самый надежный способ - использовать строку в формате YYYY-MM-DD-HH
             snapshots.forEach(filename => {
                 let snapshotDate = parseSnapshotDate(filename);
-
-                if (!snapshotDate) return;
-
-                // ПОЛУЧАЕМ ЛОКАЛЬНЫЕ КОМПОНЕНТЫ ДАТЫ
-                const year = snapshotDate.getFullYear();
-                const month = snapshotDate.getMonth();
-                const day = snapshotDate.getDate();
-                const hour = snapshotDate.getHours(); // Локальный час!
-
-                // СОЗДАЕМ UTC TIMESTAMP, который представляет НАЧАЛО ЛОКАЛЬНОГО ЧАСА
-                // Например для 11:54 LOCAL создаем timestamp 2026-03-09 11:00:00 LOCAL
-                const localHourStart = new Date(year, month, day, hour, 0, 0);
-
-                // Получаем UTC timestamp для этого момента
-                const hourKey = localHourStart.getTime();
-
-                // Теперь hourKey для 11:54 LOCAL будет соответствовать 11:00 LOCAL
-                // А в UTC это будет например 08:00 или 09:00 в зависимости от часового пояса
-
-                console.log(`File: ${filename}`);
-                console.log(`  Local time: ${snapshotDate.toLocaleString()}`);
-                console.log(`  Hour start local: ${localHourStart.toLocaleString()}`);
-                console.log(`  Hour key (UTC ms): ${hourKey}`);
-                console.log(`  Hour key as UTC: ${new Date(hourKey).toISOString()}`);
-
-                 // Группируем по этому ключу
-                if (!hourlyMap.has(hourKey)) {
-                    hourlyMap.set(hourKey, {
-                        timestamp: new Date(year, month - 1, day, hour, 0, 0).getTime(),
-                        date: new Date(Date.UTC(year, month - 1, day, hour, 0, 0)).toISOString(),
-                        count: 0,
-                        snapshots: []
-                    });
+                
+                // Если не удалось распарсить из имени, используем mtime
+                if (!snapshotDate) {
+                    const filePath = path.join(SNAPSHOTS_DIR, filename);
+                    const stats = fs.statSync(filePath);
+                    snapshotDate = stats.mtime;
                 }
 
-                const data = hourlyMap.get(hourKey);
-                data.count++;
-                data.snapshots.push(`/snapshots/${filename}`);
+                // Нормализуем до начала часа
+                const hour = new Date(snapshotDate);
+                hour.setMinutes(0, 0, 0);
+                const hourKey = hour.getTime();
+
+                // Проверяем, попадает ли в последние 24 часа
+                const hoursDiff = (now.getTime() - hourKey) / (1000 * 60 * 60);
+                if (hoursDiff <= 24 && hoursDiff >= 0) {
+                    if (hourlyData.has(hourKey)) {
+                        const data = hourlyData.get(hourKey);
+                        data.count++;
+                        data.snapshots.push(`/snapshots/${filename}`);
+                    } else {
+                        hourlyData.set(hourKey, {
+                            timestamp: hourKey,
+                            date: hour.toISOString(),
+                            count: 1,
+                            snapshots: [`/snapshots/${filename}`]
+                        });
+                    }
+                }
             });
-
-
 
             // Преобразуем Map в массив и сортируем по времени
             const result = Array.from(hourlyData.values())
@@ -129,7 +116,7 @@ activityRouter.get('/activity/range', (req, res) => {
                 return res.status(500).json({ error: 'Failed to read snapshots' });
             }
 
-            const snapshots = files.filter(f =>
+            const snapshots = files.filter(f => 
                 f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
             );
 
@@ -138,7 +125,7 @@ activityRouter.get('/activity/range', (req, res) => {
 
             snapshots.forEach(filename => {
                 let snapshotDate = parseSnapshotDate(filename);
-
+                
                 if (!snapshotDate) {
                     const filePath = path.join(SNAPSHOTS_DIR, filename);
                     const stats = fs.statSync(filePath);
@@ -182,11 +169,11 @@ activityRouter.get('/snapshots', (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Failed to read snapshots directory' });
         }
-
-        const images = files.filter(f =>
+        
+        const images = files.filter(f => 
             f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
         );
-
+        
         res.json(images);
     });
 });
