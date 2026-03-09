@@ -10,16 +10,16 @@ const SNAPSHOTS_DIR = '/var/www/detections/'; // путь к твоим снеп
 function parseSnapshotDate(filename) {
     // Формат: [2026-02-28_06-25-29]-[2026-02-28_07-06-11].jpg
     const match = filename.match(/\[(.*?)\]-\[(.*?)\]/);
-    
+
     if (match) {
         const startDateStr = match[1]; // "2026-02-28_06-25-29"
         const [datePart, timePart] = startDateStr.split('_');
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute, second] = timePart.split('-').map(Number);
-        
+
         return new Date(year, month - 1, day, hour, minute, second);
     }
-    
+
     // Если имя не соответствует формату, используем время создания файла
     return null;
 }
@@ -37,66 +37,38 @@ activityRouter.get('/activity', (req, res) => {
             }
 
             // Фильтруем только изображения
-            const snapshots = files.filter(f => 
+            const snapshots = files.filter(f =>
                 f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
             );
 
             // Группируем по часам (последние 24 часа)
             const now = new Date();
-            const hourlyData = new Map();
-            
-            // Инициализируем все 24 часа нулями
-            for (let i = 0; i < 24; i++) {
-                const hour = new Date(now);
-                hour.setHours(now.getHours() - i, 0, 0, 0);
-                const hourKey = hour.getTime();
-                hourlyData.set(hourKey, {
-                    timestamp: hourKey,
-                    date: hour.toISOString(),
+            const hourlyData = new Array(24).fill(null).map((_, hour) => {
+                const hourDate = new Date(startOfDay);
+                hourDate.setHours(hour, 0, 0, 0);
+
+                return {
+                    hour: hour, // 0-23
+                    timestamp: hourDate.getTime(),
+                    date: hourDate.toISOString(),
                     count: 0,
                     snapshots: []
-                });
-            }
+                };
+            });
 
-            // Обрабатываем каждый снапшот
+            // Обрабатываем снапшоты
             snapshots.forEach(filename => {
                 let snapshotDate = parseSnapshotDate(filename);
-                
-                // Если не удалось распарсить из имени, используем mtime
-                if (!snapshotDate) {
-                    const filePath = path.join(SNAPSHOTS_DIR, filename);
-                    const stats = fs.statSync(filePath);
-                    snapshotDate = stats.mtime;
-                }
 
-                // Нормализуем до начала часа
-                const hour = new Date(snapshotDate);
-                hour.setMinutes(0, 0, 0);
-                const hourKey = hour.getTime();
-
-                // Проверяем, попадает ли в последние 24 часа
-                const hoursDiff = (now.getTime() - hourKey) / (1000 * 60 * 60);
-                if (hoursDiff <= 24 && hoursDiff >= 0) {
-                    if (hourlyData.has(hourKey)) {
-                        const data = hourlyData.get(hourKey);
-                        data.count++;
-                        data.snapshots.push(`/snapshots/${filename}`);
-                    } else {
-                        hourlyData.set(hourKey, {
-                            timestamp: hourKey,
-                            date: hour.toISOString(),
-                            count: 1,
-                            snapshots: [`/snapshots/${filename}`]
-                        });
-                    }
+                if (snapshotDate >= startOfDay && snapshotDate <= endOfDay) {
+                    const hour = snapshotDate.getHours(); // 0-23
+                    hourlyData[hour].count++;
+                    hourlyData[hour].snapshots.push(`/snapshots/${filename}`);
                 }
             });
 
-            // Преобразуем Map в массив и сортируем по времени
-            const result = Array.from(hourlyData.values())
-                .sort((a, b) => a.timestamp - b.timestamp);
-
-            res.json(result);
+            // Возвращаем сразу массив (уже отсортирован по часам)
+            res.json(hourlyData);
         });
     } catch (error) {
         console.error('Error generating activity data:', error);
@@ -116,46 +88,37 @@ activityRouter.get('/activity/range', (req, res) => {
                 return res.status(500).json({ error: 'Failed to read snapshots' });
             }
 
-            const snapshots = files.filter(f => 
+            const snapshots = files.filter(f =>
                 f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
             );
 
             const result = [];
-            const hourlyMap = new Map();
+            const hourlyData = new Array(24).fill(null).map((_, hour) => {
+                const hourDate = new Date(startOfDay);
+                hourDate.setHours(hour, 0, 0, 0);
 
+                return {
+                    hour: hour, // 0-23
+                    timestamp: hourDate.getTime(),
+                    date: hourDate.toISOString(),
+                    count: 0,
+                    snapshots: []
+                };
+            });
+
+            // Обрабатываем снапшоты
             snapshots.forEach(filename => {
                 let snapshotDate = parseSnapshotDate(filename);
-                
-                if (!snapshotDate) {
-                    const filePath = path.join(SNAPSHOTS_DIR, filename);
-                    const stats = fs.statSync(filePath);
-                    snapshotDate = stats.mtime;
-                }
 
-                if (snapshotDate >= startDate && snapshotDate <= endDate) {
-                    const hour = new Date(snapshotDate);
-                    hour.setMinutes(0, 0, 0);
-                    const hourKey = hour.getTime();
-
-                    if (!hourlyMap.has(hourKey)) {
-                        hourlyMap.set(hourKey, {
-                            timestamp: hourKey,
-                            date: hour.toISOString(),
-                            count: 0,
-                            snapshots: []
-                        });
-                    }
-
-                    const data = hourlyMap.get(hourKey);
-                    data.count++;
-                    data.snapshots.push(`/snapshots/${filename}`);
+                if (snapshotDate >= startOfDay && snapshotDate <= endOfDay) {
+                    const hour = snapshotDate.getHours(); // 0-23
+                    hourlyData[hour].count++;
+                    hourlyData[hour].snapshots.push(`/snapshots/${filename}`);
                 }
             });
 
-            const sortedResult = Array.from(hourlyMap.values())
-                .sort((a, b) => a.timestamp - b.timestamp);
-
-            res.json(sortedResult);
+            // Возвращаем сразу массив (уже отсортирован по часам)
+            res.json(hourlyData);
         });
     } catch (error) {
         console.error('Error generating activity range:', error);
@@ -169,11 +132,11 @@ activityRouter.get('/snapshots', (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Failed to read snapshots directory' });
         }
-        
-        const images = files.filter(f => 
+
+        const images = files.filter(f =>
             f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
         );
-        
+
         res.json(images);
     });
 });
