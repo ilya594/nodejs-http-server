@@ -11,7 +11,7 @@ class HLSStreamWithDetector {
     this.savePath = '/var/www/detections/';
     this.detector = new Detector(detectorConfig);
     this.frameCallback = null;
-    this.frameSkip = detectorConfig.frameSkip || 5;
+    this.frameSkip = detectorConfig.frameSkip || 3;
     this.frameCounter = 0;
     this.saveEnabled = detectorConfig.saveEnabled || true;
     this.lastSaveTime = 0;
@@ -22,9 +22,50 @@ class HLSStreamWithDetector {
     this.gridYCount = detectorConfig.ycount || 4;
     this.gridBuffer = [];
     this.gridSaveEnabled = detectorConfig.gridSaveEnabled || true;
+    
+    // ДОБАВЛЕНО: хранение последних сохраненных кадров для предотвращения дубликатов
+    this.recentFrames = new Map(); // Храним хэши последних кадров
+    this.recentFramesMaxSize = 10; // Храним до 10 последних хэшей
+    this.frameHashThreshold = 0.95; // Порог схожести (если нужно)
 
     if (!fs.existsSync(this.savePath)) fs.mkdirSync(this.savePath, { recursive: true });
     if (!fs.existsSync(this.tempDir)) fs.mkdirSync(this.tempDir, { recursive: true });
+  }
+
+  // ДОБАВЛЕНО: простой хэш для сравнения кадров
+  calculateFrameHash(frameData) {
+    // Берем выборку пикселей для быстрого сравнения
+    const sampleSize = 100;
+    const step = Math.floor(frameData.length / sampleSize);
+    let hash = 0;
+    
+    for (let i = 0; i < frameData.length; i += step) {
+      hash = ((hash << 5) - hash) + frameData[i];
+      hash |= 0; // Преобразуем в 32-битное целое
+    }
+    
+    return hash.toString(16);
+  }
+
+  // ДОБАВЛЕНО: проверка на дубликат кадра
+  isDuplicateFrame(frameData) {
+    const hash = this.calculateFrameHash(frameData);
+    
+    if (this.recentFrames.has(hash)) {
+      console.log(`⚠️ Duplicate frame detected (hash: ${hash.substring(0, 8)}...)`);
+      return true;
+    }
+    
+    // Добавляем новый хэш
+    this.recentFrames.set(hash, Date.now());
+    
+    // Ограничиваем размер Map
+    if (this.recentFrames.size > this.recentFramesMaxSize) {
+      const oldestKey = this.recentFrames.keys().next().value;
+      this.recentFrames.delete(oldestKey);
+    }
+    
+    return false;
   }
 
   async initialize() {
@@ -95,6 +136,11 @@ class HLSStreamWithDetector {
       if (detections.length > 0) {
         console.log(`[Frame ${this.frameCounter}] Found ${detections.length} objects`);
 
+        // ИСПРАВЛЕНО: проверка на дубликат кадра
+        if (this.isDuplicateFrame(frameData)) {
+          return; // Пропускаем дубликат
+        }
+
         if (this.gridSaveEnabled) {
           await this.addFrameToGrid(frameData, detections);
         } else {
@@ -115,9 +161,8 @@ class HLSStreamWithDetector {
 
     const now = Date.now() / 1000;
 
-    if (now - this.lastSaveTime < this.saveCooldown) {
-      return false;
-    }
+    // ИСПРАВЛЕНО: lastSaveTime теперь только для режима без сетки
+    // Для сетки используем другой подход
 
     this.gridBuffer.push({
       data: frameData,
@@ -131,8 +176,8 @@ class HLSStreamWithDetector {
 
     if (this.gridBuffer.length >= this.gridXCount * this.gridYCount) {
       await this.saveGridImage();
-      this.gridBuffer = [];
-      this.lastSaveTime = now;
+      this.gridBuffer = []; // Очищаем буфер
+      // ИСПРАВЛЕНО: НЕ обновляем lastSaveTime здесь!
       return true;
     }
 
@@ -155,14 +200,24 @@ class HLSStreamWithDetector {
       const startDateStr = formatDateForFilename(firstFrame.datetime);
       const endDateStr = formatDateForFilename(lastFrame.datetime);
 
-      // НОВЫЙ формат имени: [дата_начала]-[дата_конца].jpeg
+      // ДОБАВЛЕНО: проверка существования файла
       const filename = `[${startDateStr}]-[${endDateStr}].jpeg`;
       const filepath = path.join(this.savePath, filename);
+
+      // Проверяем, не существует ли уже такой файл
+      if (fs.existsSync(filepath)) {
+        console.log(`⚠️ File already exists: ${filename}`);
+        return filepath;
+      }
 
       await this.createGridImage(filepath);
 
       console.log(`💾 Saved grid image: ${filename} (${this.gridBuffer.length} frames)`);
       console.log(`   Time range: ${startDateStr} → ${endDateStr}`);
+      
+      // ДОБАВЛЕНО: обновляем lastSaveTime ТОЛЬКО после успешного сохранения сетки
+      this.lastSaveTime = Date.now() / 1000;
+      
       return filepath;
 
     } catch (error) {
@@ -187,11 +242,8 @@ class HLSStreamWithDetector {
 
       Promise.all(savePromises)
         .then(() => {
-          // Простой вариант с concat и tile
           const ffmpegArgs = [
-            // Входные файлы
             ...tempFiles.flatMap(file => ['-i', file]),
-            // Сложный фильтр: объединяем все видео и создаем сетку
             '-filter_complex',
             `concat=n=${tempFiles.length}:v=1:a=0,scale=${this.width}:${this.height},tile=${this.gridXCount}x${this.gridYCount}`,
             '-frames:v', '1',
@@ -200,7 +252,6 @@ class HLSStreamWithDetector {
             outputPath
           ];
 
-          console.log('FFmpeg args:', ffmpegArgs.join(' '));
           console.log('Creating grid with ffmpeg...');
 
           const ffmpeg = spawn('ffmpeg', ffmpegArgs);
@@ -208,11 +259,9 @@ class HLSStreamWithDetector {
           let stderrData = '';
           ffmpeg.stderr.on('data', (data) => {
             stderrData += data.toString();
-            console.log(`FFmpeg: ${data.toString().trim()}`);
           });
 
           ffmpeg.on('error', (err) => {
-            console.error('FFmpeg process error:', err);
             reject(err);
           });
 
@@ -240,7 +289,24 @@ class HLSStreamWithDetector {
 
     const now = Date.now() / 1000;
 
+    // Проверяем cooldown
     if (now - this.lastSaveTime < this.saveCooldown) {
+      return false;
+    }
+
+    // ДОБАВЛЕНО: дополнительная проверка на дубликат по времени
+    const date = new Date();
+    const dateStr = date.toISOString()
+      .replace(/[:.]/g, '-')
+      .replace('T', '_')
+      .substring(0, 19);
+    
+    const filename = `[${dateStr}].jpeg`;
+    const filepath = path.join(this.savePath, filename);
+
+    // Проверяем, не существует ли уже файл с такой же секундой
+    if (fs.existsSync(filepath)) {
+      console.log(`⚠️ File already exists for this second: ${filename}`);
       return false;
     }
 
@@ -258,9 +324,14 @@ class HLSStreamWithDetector {
         .replace('T', '_')
         .substring(0, 19);
 
-      // НОВЫЙ формат имени: [дата].jpeg
       const filename = `[${dateStr}].jpeg`;
       const filepath = path.join(this.savePath, filename);
+
+      // ДОБАВЛЕНО: финальная проверка перед сохранением
+      if (fs.existsSync(filepath)) {
+        console.log(`⚠️ File already exists: ${filename}`);
+        return null;
+      }
 
       await this.convertRawToJPEG(frameData, filepath);
 
