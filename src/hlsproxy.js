@@ -11,7 +11,7 @@ class HLSStreamWithDetector {
     this.savePath = '/var/www/detections/';
     this.detector = new Detector(detectorConfig);
     this.frameCallback = null;
-    this.frameSkip = detectorConfig.frameSkip || 3;
+    this.frameSkip = detectorConfig.frameSkip || 5;
     this.frameCounter = 0;
     this.saveEnabled = detectorConfig.saveEnabled || true;
     this.lastSaveTime = 0;
@@ -26,7 +26,7 @@ class HLSStreamWithDetector {
     // ДОБАВЛЕНО: хранение последних сохраненных кадров для предотвращения дубликатов
     this.recentFrames = new Map(); // Храним хэши последних кадров
     this.recentFramesMaxSize = 10; // Храним до 10 последних хэшей
-    this.frameHashThreshold = 0.95; // Порог схожести (если нужно)
+    this.frameHashThreshold = 0.85; // Порог схожести (если нужно)
 
     if (!fs.existsSync(this.savePath)) fs.mkdirSync(this.savePath, { recursive: true });
     if (!fs.existsSync(this.tempDir)) fs.mkdirSync(this.tempDir, { recursive: true });
