@@ -1,14 +1,14 @@
-// activity-server.js или добавь в существующий роутер
+// activity-server.js
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
 const activityRouter = express.Router();
-const SNAPSHOTS_DIR = '/var/www/detections/'; // путь к твоим снепшотам
+const SNAPSHOTS_DIR = '/var/www/detections/'; // путь к снепшотам
 
 // Вспомогательная функция для парсинга даты из имени файла
 function parseSnapshotDate(filename) {
-    // Формат: [2026-02-28_06-25-29]-[2026-02-28_07-06-11].jpg
+    // Формат: [2026-02-28_06-25-29]-[2026-02-28_07-06-11].jpeg
     const match = filename.match(/\[(.*?)\]-\[(.*?)\]/);
 
     if (match) {
@@ -20,19 +20,18 @@ function parseSnapshotDate(filename) {
         return new Date(year, month - 1, day, hour, minute, second);
     }
 
-    // Если имя не соответствует формату, используем время создания файла
     return null;
 }
 
-// Получить данные для графика активности
 activityRouter.get('/activity', (req, res) => {
-    console.log('getting activity')
+    console.log('[NServer] Getting activity data...');
+    
     try {
-        // Читаем все файлы в директории со снепшотами
         fs.readdir(SNAPSHOTS_DIR, (err, files) => {
-            console.log('[NServer] activity router: reading dir: [' + SNAPSHOTS_DIR + ']');
+            console.log(`[NServer] Reading directory: ${SNAPSHOTS_DIR}`);
+            
             if (err) {
-                console.error('Error reading snapshots directory:', err);
+                console.error('[NServer] Error reading snapshots directory:', err);
                 return res.status(500).json({ error: 'Failed to read snapshots' });
             }
 
@@ -40,15 +39,26 @@ activityRouter.get('/activity', (req, res) => {
             const snapshots = files.filter(f =>
                 f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
             );
+            
+            console.log(`[NServer] Found ${snapshots.length} snapshots`);
 
-            // Группируем по часам (последние 24 часа)
+            // ИСПРАВЛЕНО: Определяем начало и конец текущих суток
             const now = new Date();
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0, 0, 0, 0); // Начало дня 00:00:00
+            
+            const endOfDay = new Date(now);
+            endOfDay.setHours(23, 59, 59, 999); // Конец дня 23:59:59
+
+            console.log(`[NServer] Day range: ${startOfDay.toISOString()} -> ${endOfDay.toISOString()}`);
+
+            // ИСПРАВЛЕНО: Создаем массив на 24 часа
             const hourlyData = new Array(24).fill(null).map((_, hour) => {
                 const hourDate = new Date(startOfDay);
                 hourDate.setHours(hour, 0, 0, 0);
 
                 return {
-                    hour: hour, // 0-23
+                    hour: hour,
                     timestamp: hourDate.getTime(),
                     date: hourDate.toISOString(),
                     count: 0,
@@ -58,87 +68,38 @@ activityRouter.get('/activity', (req, res) => {
 
             // Обрабатываем снапшоты
             snapshots.forEach(filename => {
-                let snapshotDate = parseSnapshotDate(filename);
-
-                if (snapshotDate >= startOfDay && snapshotDate <= endOfDay) {
-                    const hour = snapshotDate.getHours(); // 0-23
-                    hourlyData[hour].count++;
-                    hourlyData[hour].snapshots.push(`/snapshots/${filename}`);
+                const snapshotDate = parseSnapshotDate(filename);
+                
+                if (snapshotDate) {
+                    // Проверяем, попадает ли в сегодняшний день
+                    if (snapshotDate >= startOfDay && snapshotDate <= endOfDay) {
+                        const hour = snapshotDate.getHours(); // 0-23
+                        
+                        // ИСПРАВЛЕНО: Проверяем что hour в допустимом диапазоне
+                        if (hour >= 0 && hour < 24) {
+                            hourlyData[hour].count++;
+                            hourlyData[hour].snapshots.push(`/snapshots/${filename}`);
+                            
+                            console.log(`[NServer] File: ${filename} -> hour ${hour}, count: ${hourlyData[hour].count}`);
+                        }
+                    }
                 }
             });
 
-            // Возвращаем сразу массив (уже отсортирован по часам)
+            // Логируем результат для отладки
+            console.log('[NServer] Hourly data:');
+            hourlyData.forEach(h => {
+                if (h.count > 0) {
+                    console.log(`  Hour ${h.hour}: ${h.count} snapshots`);
+                }
+            });
+
             res.json(hourlyData);
         });
     } catch (error) {
-        console.error('Error generating activity data:', error);
+        console.error('[NServer] Error generating activity data:', error);
         res.status(500).json({ error: 'Failed to generate activity data' });
     }
-});
-
-// Опционально: эндпоинт для получения статистики за период
-activityRouter.get('/activity/range', (req, res) => {
-    try {
-        const { start, end } = req.query;
-        const startDate = start ? new Date(start) : new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const endDate = end ? new Date(end) : new Date();
-
-        fs.readdir(SNAPSHOTS_DIR, (err, files) => {
-            if (err) {
-                return res.status(500).json({ error: 'Failed to read snapshots' });
-            }
-
-            const snapshots = files.filter(f =>
-                f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
-            );
-
-            const result = [];
-            const hourlyData = new Array(24).fill(null).map((_, hour) => {
-                const hourDate = new Date(startOfDay);
-                hourDate.setHours(hour, 0, 0, 0);
-
-                return {
-                    hour: hour, // 0-23
-                    timestamp: hourDate.getTime(),
-                    date: hourDate.toISOString(),
-                    count: 0,
-                    snapshots: []
-                };
-            });
-
-            // Обрабатываем снапшоты
-            snapshots.forEach(filename => {
-                let snapshotDate = parseSnapshotDate(filename);
-
-                if (snapshotDate >= startOfDay && snapshotDate <= endOfDay) {
-                    const hour = snapshotDate.getHours(); // 0-23
-                    hourlyData[hour].count++;
-                    hourlyData[hour].snapshots.push(`/snapshots/${filename}`);
-                }
-            });
-
-            // Возвращаем сразу массив (уже отсортирован по часам)
-            res.json(hourlyData);
-        });
-    } catch (error) {
-        console.error('Error generating activity range:', error);
-        res.status(500).json({ error: 'Failed to generate activity range' });
-    }
-});
-
-// Опционально: получить список всех снапшотов (если еще нет)
-activityRouter.get('/snapshots', (req, res) => {
-    fs.readdir(SNAPSHOTS_DIR, (err, files) => {
-        if (err) {
-            return res.status(500).json({ error: 'Failed to read snapshots directory' });
-        }
-
-        const images = files.filter(f =>
-            f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
-        );
-
-        res.json(images);
-    });
 });
 
 module.exports = { activityRouter };
