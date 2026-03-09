@@ -11,11 +11,11 @@ class HLSStreamWithDetector {
     this.savePath = '/var/www/detections/';
     this.detector = new Detector(detectorConfig);
     this.frameCallback = null;
-    this.frameSkip = detectorConfig.frameSkip || 2;
+    this.frameSkip = detectorConfig.frameSkip || 1;
     this.frameCounter = 0;
     this.saveEnabled = detectorConfig.saveEnabled || true;
     this.lastSaveTime = 0;
-    this.saveCooldown = detectorConfig.saveCooldown || 2;
+    this.saveCooldown = detectorConfig.saveCooldown || 1;
 
     // Параметры для сохранения сетки
     this.gridXCount = detectorConfig.xcount || 4;
