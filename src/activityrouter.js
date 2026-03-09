@@ -60,41 +60,33 @@ activityRouter.get('/activity', (req, res) => {
             }
 
             // Обрабатываем каждый снапшот
+            // Самый надежный способ - использовать строку в формате YYYY-MM-DD-HH
             snapshots.forEach(filename => {
                 let snapshotDate = parseSnapshotDate(filename);
 
-                // Создаем дату и обнуляем минуты в LOCAL TIME
-                const localDate = new Date(snapshotDate);
-                localDate.setMinutes(0, 0, 0);
+                if (!snapshotDate) return;
 
-                // Используем LOCAL TIMESTAMP как ключ
-                // Но сохраняем в ISO format с правильным смещением
-                const year = localDate.getFullYear();
-                const month = localDate.getMonth();
-                const day = localDate.getDate();
-                const hour = localDate.getHours();
+                // Создаем строковый ключ в формате "2026-03-09-11" (локальный час)
+                const year = snapshotDate.getFullYear();
+                const month = String(snapshotDate.getMonth() + 1).padStart(2, '0');
+                const day = String(snapshotDate.getDate()).padStart(2, '0');
+                const hour = String(snapshotDate.getHours()).padStart(2, '0');
 
-                // Создаем UTC дату, которая выглядит как локальная
-                const utcDate = new Date(Date.UTC(year, month, day, hour, 0, 0));
+                const hourKey = `${year}-${month}-${day}-${hour}`; // "2026-03-09-11"
 
-                const hourKey = utcDate.getTime(); // UTC timestamp
-
-                // Проверяем, попадает ли в последние 24 часа
-                const hoursDiff = (now.getTime() - hourKey) / (1000 * 60 * 60);
-                if (hoursDiff <= 24 && hoursDiff >= 0) {
-                    if (hourlyData.has(hourKey)) {
-                        const data = hourlyData.get(hourKey);
-                        data.count++;
-                        data.snapshots.push(`/snapshots/${filename}`);
-                    } else {
-                        hourlyData.set(hourKey, {
-                            timestamp: hourKey,
-                            date: hour.toISOString(),
-                            count: 1,
-                            snapshots: [`/snapshots/${filename}`]
-                        });
-                    }
+                // Группируем по этому ключу
+                if (!hourlyMap.has(hourKey)) {
+                    hourlyMap.set(hourKey, {
+                        timestamp: new Date(year, month - 1, day, hour, 0, 0).getTime(),
+                        date: new Date(Date.UTC(year, month - 1, day, hour, 0, 0)).toISOString(),
+                        count: 0,
+                        snapshots: []
+                    });
                 }
+
+                const data = hourlyMap.get(hourKey);
+                data.count++;
+                data.snapshots.push(`/snapshots/${filename}`);
             });
 
             // Преобразуем Map в массив и сортируем по времени
