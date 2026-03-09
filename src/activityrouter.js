@@ -66,15 +66,29 @@ activityRouter.get('/activity', (req, res) => {
 
                 if (!snapshotDate) return;
 
-                // Создаем строковый ключ в формате "2026-03-09-11" (локальный час)
+                // ПОЛУЧАЕМ ЛОКАЛЬНЫЕ КОМПОНЕНТЫ ДАТЫ
                 const year = snapshotDate.getFullYear();
-                const month = String(snapshotDate.getMonth() + 1).padStart(2, '0');
-                const day = String(snapshotDate.getDate()).padStart(2, '0');
-                const hour = String(snapshotDate.getHours()).padStart(2, '0');
+                const month = snapshotDate.getMonth();
+                const day = snapshotDate.getDate();
+                const hour = snapshotDate.getHours(); // Локальный час!
 
-                const hourKey = `${year}-${month}-${day}-${hour}`; // "2026-03-09-11"
+                // СОЗДАЕМ UTC TIMESTAMP, который представляет НАЧАЛО ЛОКАЛЬНОГО ЧАСА
+                // Например для 11:54 LOCAL создаем timestamp 2026-03-09 11:00:00 LOCAL
+                const localHourStart = new Date(year, month, day, hour, 0, 0);
 
-                // Группируем по этому ключу
+                // Получаем UTC timestamp для этого момента
+                const hourKey = localHourStart.getTime();
+
+                // Теперь hourKey для 11:54 LOCAL будет соответствовать 11:00 LOCAL
+                // А в UTC это будет например 08:00 или 09:00 в зависимости от часового пояса
+
+                console.log(`File: ${filename}`);
+                console.log(`  Local time: ${snapshotDate.toLocaleString()}`);
+                console.log(`  Hour start local: ${localHourStart.toLocaleString()}`);
+                console.log(`  Hour key (UTC ms): ${hourKey}`);
+                console.log(`  Hour key as UTC: ${new Date(hourKey).toISOString()}`);
+
+                 // Группируем по этому ключу
                 if (!hourlyMap.has(hourKey)) {
                     hourlyMap.set(hourKey, {
                         timestamp: new Date(year, month - 1, day, hour, 0, 0).getTime(),
@@ -88,6 +102,8 @@ activityRouter.get('/activity', (req, res) => {
                 data.count++;
                 data.snapshots.push(`/snapshots/${filename}`);
             });
+
+
 
             // Преобразуем Map в массив и сортируем по времени
             const result = Array.from(hourlyData.values())
