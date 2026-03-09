@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const activityRouter = express.Router();
-const SNAPSHOTS_DIR = path.join(__dirname, 'saved_frames'); // путь к твоим снепшотам
+const SNAPSHOTS_DIR = '/var/www/detections/'; // путь к твоим снепшотам
 
 // Вспомогательная функция для парсинга даты из имени файла
 function parseSnapshotDate(filename) {
