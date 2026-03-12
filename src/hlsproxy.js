@@ -22,6 +22,7 @@ class HLSStreamWithDetector {
     this.gridYCount = detectorConfig.ycount || 4;
     this.gridBuffer = [];
     this.gridSaveEnabled = detectorConfig.gridSaveEnabled || true;
+    this.isGridSaving = false;
     
     // ДОБАВЛЕНО: хранение последних сохраненных кадров для предотвращения дубликатов
     this.recentFrames = new Map(); // Храним хэши последних кадров
@@ -185,6 +186,11 @@ class HLSStreamWithDetector {
   }
 
   async saveGridImage() {
+    if (this.isGridSaving) return;
+    this.isGridSaving = true;
+    setTimeout(() => {
+      this.isGridSaving = false;
+    }, 20000);
     try {
       const firstFrame = this.gridBuffer[0];
       const lastFrame = this.gridBuffer[this.gridBuffer.length - 1];
