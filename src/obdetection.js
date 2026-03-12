@@ -59,18 +59,30 @@ class Detector {
         for (const [xmin, ymin, xmax, ymax, score, classId] of predictions) {
             if (score < threshold) continue;
 
+            const className = this.model.config.id2label[classId] || `class_${classId}`;
+
             const detection = {
                 bbox: [xmin, ymin, xmax, ymax],
                 score: score,
                 classId: classId,
-                className: this.model.config.id2label[classId] || `class_${classId}`,
+                className: className,
                 inferenceTime: inferenceTime
             };
 
             detections.push(detection);
             console.log(`🔍 Found "${detection.className}" at [${xmin.toFixed(0)}, ${ymin.toFixed(0)}, ${xmax.toFixed(0)}, ${ymax.toFixed(0)}] with score ${score.toFixed(2)} (${inferenceTime.toFixed(0)}ms)`);
         }
-        return detections;
+
+        // ИЗМЕНЕНО: проверяем наличие 'person' в detections
+        const hasPerson = detections.some(d => d.className.toLowerCase() === 'person');
+
+        if (hasPerson) {
+            console.log(`✅ Person detected! Returning all ${detections.length} detections`);
+            return detections; // возвращаем все детекции, если есть человек
+        } else {
+            console.log(`❌ No person detected, returning empty array`);
+            return []; // возвращаем пустой массив, если нет человека
+        }
     }
 
     async detect(track) {
