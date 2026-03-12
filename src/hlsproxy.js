@@ -34,7 +34,7 @@ class HLSStreamWithDetector {
 
     // ДОБАВЛЕНО: таймер для принудительной очистки буфера (если долго нет детекций)
     this.gridTimeout = null;
-    this.gridMaxWaitTime = 30000; // 30 секунд максимум ожидания
+    this.gridMaxWaitTime = 60000;
 
     if (!fs.existsSync(this.savePath)) fs.mkdirSync(this.savePath, { recursive: true });
     if (!fs.existsSync(this.tempDir)) fs.mkdirSync(this.tempDir, { recursive: true });
@@ -184,7 +184,6 @@ class HLSStreamWithDetector {
   async addFrameToGrid(frameData, detections) {
     if (!this.saveEnabled) return false;
 
-    // УЛУЧШЕНО: не добавляем кадры если идет сохранение
     if (this.isSavingGrid) {
       console.log('⏳ Grid is being saved, skipping frame...');
       return false;
@@ -205,13 +204,19 @@ class HLSStreamWithDetector {
     // Сбрасываем таймер при добавлении кадра
     this.resetGridTimeout();
 
+    // Сохраняем ТОЛЬКО когда набрали нужное количество
     if (this.gridBuffer.length >= this.gridXCount * this.gridYCount) {
-      // УЛУЧШЕНО: небольшая задержка перед сохранением
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Небольшая задержка для накопления всех кадров
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // ДОБАВЛЕНО: проверка что буфер все еще полный (мог измениться за время задержки)
+      // Проверяем, что буфер все еще полный
       if (this.gridBuffer.length >= this.gridXCount * this.gridYCount && !this.isSavingGrid) {
-        await this.saveGridImage();
+        // Делаем копию буфера
+        const bufferToSave = [...this.gridBuffer];
+        // Очищаем буфер
+        this.gridBuffer = [];
+        // Сохраняем
+        await this.saveGridImage(bufferToSave);
       }
       return true;
     }
@@ -219,8 +224,8 @@ class HLSStreamWithDetector {
     return false;
   }
 
-  async saveGridImage(force = false) {
-    // УЛУЧШЕНО: защита от множественных сохранений
+  // Исправленный метод сохранения - принимает буфер параметром
+  async saveGridImage(bufferToSave) {
     if (this.isSavingGrid) {
       console.log('⏳ Already saving grid, skipping...');
       return null;
@@ -235,14 +240,19 @@ class HLSStreamWithDetector {
     }
 
     try {
-      // ДОБАВЛЕНО: проверка что буфер не пуст
-      if (this.gridBuffer.length === 0) {
+      if (bufferToSave.length === 0) {
         console.log('⚠️ Grid buffer is empty, nothing to save');
         return null;
       }
 
-      const firstFrame = this.gridBuffer[0];
-      const lastFrame = this.gridBuffer[this.gridBuffer.length - 1];
+      // Проверяем, что у нас достаточно кадров
+      if (bufferToSave.length < this.gridXCount * this.gridYCount) {
+        console.log(`⚠️ Not enough frames (${bufferToSave.length}/${this.gridXCount * this.gridYCount}), skipping save`);
+        return null;
+      }
+
+      const firstFrame = bufferToSave[0];
+      const lastFrame = bufferToSave[bufferToSave.length - 1];
 
       const formatDateForFilename = (isoString) => {
         return isoString
@@ -254,61 +264,55 @@ class HLSStreamWithDetector {
       const startDateStr = formatDateForFilename(firstFrame.datetime);
       const endDateStr = formatDateForFilename(lastFrame.datetime);
 
-      // УЛУЧШЕНО: уникальность имени с микросекундами если force
-      let filename;
-      if (force) {
-        const now = new Date().toISOString()
-          .replace(/[:.]/g, '-')
-          .replace('T', '_')
-          .substring(0, 23);
-        filename = `[${startDateStr}]-[${endDateStr}]_partial_${now}.jpeg`;
-      } else {
-        filename = `[${startDateStr}]-[${endDateStr}].jpeg`;
-      }
-
+      const filename = `[${startDateStr}]-[${endDateStr}].jpeg`;
       const filepath = path.join(this.savePath, filename);
 
-      // УЛУЧШЕНО: атомарная проверка существования файла
+      // Проверяем существование файла
       try {
         await fs.promises.access(filepath, fs.constants.F_OK);
-        console.log(`⚠️ File already exists: ${filename}`);
-
-        // Если файл существует, добавляем суффикс
-        const baseName = filename.replace('.jpeg', '');
-        filename = `${baseName}_${Date.now()}.jpeg`;
-        console.log(`   Using alternative name: ${filename}`);
+        console.log(`⚠️ File already exists: ${filename}, skipping`);
+        return null;
       } catch (e) {
-        // Файл не существует - отлично!
+        // Файла нет - сохраняем
       }
 
-      // Копируем буфер для сохранения
-      const bufferToSave = [...this.gridBuffer];
-
-      // Очищаем буфер ДО сохранения, чтобы новые кадры не добавлялись
-      this.gridBuffer = [];
-
       // Создаем изображение
-      await this.createGridImage(bufferToSave, path.join(this.savePath, filename));
+      await this.createGridImage(bufferToSave, filepath);
 
       console.log(`💾 Saved grid image: ${filename} (${bufferToSave.length} frames)`);
       console.log(`   Time range: ${startDateStr} → ${endDateStr}`);
 
-      // Обновляем lastSaveTime
       this.lastSaveTime = Date.now() / 1000;
 
       return filepath;
 
     } catch (error) {
       console.error('❌ Failed to save grid image:', error);
-
-      // В случае ошибки возвращаем кадры обратно в буфер?
-      // Лучше не надо, чтобы не создавать циклы
-
       return null;
     } finally {
-      // Всегда снимаем флаг сохранения
       this.isSavingGrid = false;
     }
+  }
+
+  // Исправленный таймаут - не сохраняем при неполном буфере
+  resetGridTimeout() {
+    if (this.gridTimeout) {
+      clearTimeout(this.gridTimeout);
+    }
+
+    this.gridTimeout = setTimeout(() => {
+      if (this.gridBuffer.length > 0 && !this.isSavingGrid) {
+        console.log(`⚠️ Grid buffer timeout (${this.gridBuffer.length}/${this.gridXCount * this.gridYCount} frames). Clearing buffer without saving...`);
+        // Только очищаем, не сохраняем
+        this.gridBuffer = [];
+
+        // Сбрасываем таймер
+        if (this.gridTimeout) {
+          clearTimeout(this.gridTimeout);
+          this.gridTimeout = null;
+        }
+      }
+    }, this.gridMaxWaitTime);
   }
 
   async createGridImage(buffer, outputPath) {
