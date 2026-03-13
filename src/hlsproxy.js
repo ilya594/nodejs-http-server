@@ -23,7 +23,7 @@ class HLSStreamWithDetector {
     this.gridBuffer = [];
     this.gridSaveEnabled = detectorConfig.gridSaveEnabled || true;
     this.isGridSaving = false;
-
+    
     // ДОБАВЛЕНО: хранение последних сохраненных кадров для предотвращения дубликатов
     this.recentFrames = new Map(); // Храним хэши последних кадров
     this.recentFramesMaxSize = 10; // Храним до 10 последних хэшей
@@ -39,33 +39,33 @@ class HLSStreamWithDetector {
     const sampleSize = 100;
     const step = Math.floor(frameData.length / sampleSize);
     let hash = 0;
-
+    
     for (let i = 0; i < frameData.length; i += step) {
       hash = ((hash << 5) - hash) + frameData[i];
       hash |= 0; // Преобразуем в 32-битное целое
     }
-
+    
     return hash.toString(16);
   }
 
   // ДОБАВЛЕНО: проверка на дубликат кадра
   isDuplicateFrame(frameData) {
     const hash = this.calculateFrameHash(frameData);
-
+    
     if (this.recentFrames.has(hash)) {
       console.log(`⚠️ Duplicate frame detected (hash: ${hash.substring(0, 8)}...)`);
       return true;
     }
-
+    
     // Добавляем новый хэш
     this.recentFrames.set(hash, Date.now());
-
+    
     // Ограничиваем размер Map
     if (this.recentFrames.size > this.recentFramesMaxSize) {
       const oldestKey = this.recentFrames.keys().next().value;
       this.recentFrames.delete(oldestKey);
     }
-
+    
     return false;
   }
 
@@ -220,10 +220,10 @@ class HLSStreamWithDetector {
 
       console.log(`💾 Saved grid image: ${filename} (${this.gridBuffer.length} frames)`);
       console.log(`   Time range: ${startDateStr} → ${endDateStr}`);
-
+      
       // ДОБАВЛЕНО: обновляем lastSaveTime ТОЛЬКО после успешного сохранения сетки
       this.lastSaveTime = Date.now() / 1000;
-
+      
       return filepath;
 
     } catch (error) {
@@ -232,7 +232,7 @@ class HLSStreamWithDetector {
     }
   }
 
-  async createGridImage_0(outputPath) {
+  async createGridImage(outputPath) {
     return new Promise((resolve, reject) => {
       const tempDir = path.join(this.tempDir, 'grid_temp');
       if (!fs.existsSync(tempDir)) {
@@ -290,68 +290,6 @@ class HLSStreamWithDetector {
     });
   }
 
-  async createGridImage(outputPath) {
-    return new Promise((resolve, reject) => {
-      const tempDir = path.join(this.tempDir, 'grid_temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      const tempFiles = [];
-      const savePromises = this.gridBuffer.map((item, index) => {
-        const tempFile = path.join(tempDir, `frame_${index.toString().padStart(3, '0')}.jpg`);
-        tempFiles.push(tempFile);
-        return this.convertRawToJPEG(item.data, tempFile);
-      });
-
-      Promise.all(savePromises)
-        .then(() => {
-          // Исправлено: убрали scale, оставили только tile
-          const ffmpegArgs = [
-            ...tempFiles.flatMap(file => ['-i', file]),
-            '-filter_complex',
-            `tile=${this.gridXCount}x${this.gridYCount}`,
-            '-frames:v', '1',
-            '-q:v', '2',  // качество JPEG (2 = отличное)
-            '-y',
-            outputPath
-          ];
-
-          console.log('Creating grid with ffmpeg...');
-
-          const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-
-          let stderrData = '';
-          ffmpeg.stderr.on('data', (data) => {
-            stderrData += data.toString();
-          });
-
-          ffmpeg.on('error', (err) => {
-            reject(err);
-          });
-
-          ffmpeg.on('close', (code) => {
-            // Очищаем временные файлы
-            tempFiles.forEach(file => {
-              try { fs.unlinkSync(file); } catch (e) { }
-            });
-
-            if (code === 0) {
-              // Получаем размер итогового файла для информации
-              const stats = fs.statSync(outputPath);
-              const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
-              console.log(`✅ Grid image created: ${path.basename(outputPath)} (${fileSizeMB} MB)`);
-              resolve(outputPath);
-            } else {
-              console.error('FFmpeg stderr:', stderrData);
-              reject(new Error(`FFmpeg grid creation failed with code ${code}`));
-            }
-          });
-        })
-        .catch(reject);
-    });
-  }
-
   async checkAndSaveFrame(frameData, detections) {
     if (!this.saveEnabled) return false;
 
@@ -368,7 +306,7 @@ class HLSStreamWithDetector {
       .replace(/[:.]/g, '-')
       .replace('T', '_')
       .substring(0, 19);
-
+    
     const filename = `[${dateStr}].jpeg`;
     const filepath = path.join(this.savePath, filename);
 
